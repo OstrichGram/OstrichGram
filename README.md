@@ -3,6 +3,9 @@
 
 Welcome to OstrichGram, a chat software for the Nostr network.  With OstrichGram, you can join group chatrooms on Nostr, and message your friends, too.
 
+
+![OstrichGram ](OG-icon.png)
+
 # Warnings
 
 If you're new to Nostr, be forewarned: there is often no "delete button".  Although the nostr protocol has a "request to remove" feature, it is not implemented widely yet, and there is no guarantee all relays support it.  OstrichGram doesn't have a delete messages feature.  In general, Nostr is decentralized. It's an open protocol, and there's no company to call to ask for help. Please use nostr and OstrichGram carefully and not for anything sensitive, embarrasing, or otherwise harmful.  
@@ -12,6 +15,16 @@ Open source software like OstrichGram may potentially have bugs and comes with "
 # Overview & Features
  
  With OstrichGram, you can create your own keys and identities, store your friends' pubkeys, browse relays for chatrooms, participate in group chats, and send direct encrypted messages to your friends. That's it in a nutshell. It uses NIP-01 (the basic protocol) along with NIP-28 (group chats), NIP-04 (direct messages), and NIP-10 (replies).
+ 
+ # Screenshots
+
+![Screenshot 1 ](OG-SHOT1.png)
+
+![Screenshot 2  ](OG-SHOT2.png)
+
+![Screenshot 3 ](OG-SHOT3.png)
+
+![Screenshot 4 ](OG-SHOT4.png)
  
 # Some Details and Considerations
 
