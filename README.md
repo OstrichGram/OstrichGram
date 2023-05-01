@@ -42,6 +42,8 @@ OstrichGram is new software, and many relays are spotty, so don't expect the exp
 
 OstrichGram uses the multiAvatar library and creates determinstic avatars for every npub key, giving each user a unique looking icon. In OstrichGram, you can custom the avatars for your friends by choosing one of the 16 avatar styles.  The preview avatars you see when adding a friend may not look exactly like the final avatar after the contact is saved. OstrichGram also dulls the colors of non-contacts in group chats so that there is a visual distinction between contacts and non-contacts.
 
+The users' own icon is represented by an Ostrich and the application will rotate through several colors if you create multiple aliases.  In the future, icons for users and contacts will be customizable.
+
 # The Database
 
 The application will create OstrichGram_DB.hive in your MyDocuments folder. It is recommended to backup the database periodically.
