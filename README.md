@@ -49,11 +49,13 @@ The users' own icon is represented by an Ostrich and the application will rotate
 The application will create OstrichGram_DB.hive in your MyDocuments folder. It is recommended to backup the database periodically.
 If you want to know more about the Database structure, you can read the code comment block in og_hive_interface.dart.
 
-# How to Run OstrichGram
+# How to Download and Run OstrichGram
 
-For linux desktop, download the .tar.gz file, unzip it, and navigate to build/linux/x64/release/bundle, and then run Ostrichgram by clicking on the icon.  
+First, download the files. The release files are here: [https://ostrichgram.com/Downloads/](https://ostrichgram.com/Downloads) 
 
-For Windows desktop, download the .zip file, unzip it, and navigate to build/windows/runner/Release,  and then run Ostrichgram by clicking on the icon.
+For linux desktop, download the linux-build.zip file, unzip it, and navigate to build/linux/x64/release/bundle, and then run Ostrichgram by clicking on the icon.  
+
+For Windows desktop, download the windows-build.zip file, unzip it, and navigate to build/windows/runner/Release,  and then run Ostrichgram by clicking on the icon.
 
 Be aware that you can't simply copy the single file and move it to another location.  You need the entire build folder, as this contains required libraries and dll files, etc. This is apparently the standard way to deploy flutter projects.
 
