@@ -351,11 +351,14 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
   }
 
 
-
-  static Future<List<Map<String, String>>> processWebSocketData(Map<String, List<String>> args) async {
+  static Future<List<Map<String, String>>> processWebSocketData(Map<String, dynamic> args) async {
     List<String> fetchedData = [];
     if (args["fetchedData"] != null ) {
       fetchedData = args["fetchedData"]!;
+    }
+    String hiveDbPath = "";
+    if (args["hiveDbPath"] != null ) {
+      hiveDbPath = args["hiveDbPath"]!;
     }
 
     List<Map<String, String>> processedData = [];
@@ -391,17 +394,13 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
             Uint8List pubkey = Uint8List.fromList(hex.decode(eventData['pubkey']));
             Uint8List sig = Uint8List.fromList(hex.decode(eventData['sig']));
 
-/*
+
             // Get the config settings
-            Map<String, dynamic> configSettings = await OG_HiveInterface.getData_ConfigSettings();
+            Map<String, dynamic> configSettings = await OG_HiveInterface.getData_ConfigSettings(myHiveDbPath: hiveDbPath);
             // Check if signature verification is enabled in the settings
             bool verifySignatures = configSettings['verify_signatures'] ?? true;
             // If signature verification is enabled, call the schnorr_verify function, otherwise set isSignatureValid to true
             bool isSignatureValid = verifySignatures ? bip340.schnorr_verify(msg, pubkey, sig) : true;
-
-*/
-
-            bool isSignatureValid = bip340.schnorr_verify(msg, pubkey, sig);
 
 
             //USEFUL FOR TESTING IF SIGNATURES ARE BEING PROPERLY VERIFIED.

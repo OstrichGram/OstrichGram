@@ -860,14 +860,26 @@ class ui_helper {
     // sort message by date
     rawData.sort((b, a) => int.parse(b['created_at']!).compareTo(int.parse(a['created_at']!)));
 
+
     //define colors
     Map<String, Map<String, dynamic>> userDetails = {};
     int colorCounter = 1;
     await for (var message in Stream.fromIterable(rawData)) {
+
+
       String? pubkey = message['pubkey'];
+
+
       if (pubkey != null && !userDetails.containsKey(pubkey)) {
+      } else {
+      }
+
+
+      if (pubkey != null && !userDetails.containsKey(pubkey)) {
+
         String displayName = await getDisplayName(pubkey); // Call the sub-function to get the display name
-        bool isMe = await userIsMe(pubkey, my_user_pubkey); // Call the sub-function to check if the user is the app user
+
+        bool isMe = userIsMe(pubkey, my_user_pubkey); // Call the sub-function to check if the user is the app user
 
         userDetails[pubkey] = {
           'pubkey': pubkey, // Add the pubkey to the userDetails map
@@ -900,7 +912,6 @@ class ui_helper {
 
           // Default to something even though we should have it
           int userColor = 1;
-
           if (userDetails != null) {
             var userMap = userDetails[pubkey];
             if (userMap != null) {
@@ -915,7 +926,6 @@ class ui_helper {
           String eTagReply = "";
           String pTagReply = "";
           String? tagsString ="";
-
           if (message != null && message['tags'] != null) {
             tagsString  = message['tags'];
           }
@@ -940,7 +950,6 @@ class ui_helper {
           String replySnippet = '';
           Color replyDisplayNameColor = Colors.black;
 
-
           if (eTagReply.isNotEmpty) {
             for (var event in rawData) {
               if (event['id'] == eTagReply) {
@@ -950,8 +959,8 @@ class ui_helper {
             }
           }
 
+          if (pTagReply.isNotEmpty && (userDetails[pTagReply]?['isMe'] == true)) {
 
-          if (pTagReply.isNotEmpty && userDetails[pTagReply]?['isMe']) {
             replyDisplayName = "me";
             replyDisplayNameColor = Colors.black;
             }

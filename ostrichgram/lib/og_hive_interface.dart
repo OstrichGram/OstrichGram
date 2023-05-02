@@ -39,14 +39,17 @@ class OG_HiveInterface {
   static  Box? _config_settings_box;
   static late Directory appDocumentDir;
   static late String hiveDbPath;
-
   static final _lock = Lock();
+  static bool _isInitialized = false;
 
   OG_HiveInterface() {
     init();
   }
 
-  Future<void> init() async {
+  static Future<void> init() async {
+    if (_isInitialized) {
+      return;
+    }
     await Hive.initFlutter();
 
      appDocumentDir = await getApplicationDocumentsDirectory();
@@ -61,10 +64,12 @@ class OG_HiveInterface {
     _messages_group_box = await Hive.openBox('messages_group', path: hiveDbPath);
     _messages_friend_box = await Hive.openBox('messages_friend', path: hiveDbPath);
     _config_settings_box = await Hive.openBox('config_settings', path: hiveDbPath);
-
+    _isInitialized = true;
   }
 
-
+static String getHiveDbPath() {
+    return hiveDbPath;
+}
   static Future<void> initRelaysBox() async {
     if (_relays_box == null || !(_relays_box?.isOpen ?? false)) {
       _relays_box = await Hive.openBox('relays', path: hiveDbPath);
@@ -345,8 +350,12 @@ class OG_HiveInterface {
   }
 
 
+  static Future<Map<String, dynamic>> getData_ConfigSettings({String myHiveDbPath = ""} ) async {
 
-  static Future<Map<String, dynamic>> getData_ConfigSettings() async {
+    if (myHiveDbPath != "")  {
+      hiveDbPath = myHiveDbPath;
+    }
+
     Box box;
     if (OG_HiveInterface._config_settings_box?.isOpen ?? false) {
       box = OG_HiveInterface._config_settings_box ?? await Hive.openBox('config_settings');
@@ -418,6 +427,7 @@ class OG_HiveInterface {
 
 
   static Future<Map<String, String>> getData_Chosen_Alias_Map() async {
+
     Box box;
     if (OG_HiveInterface._chosen_alias_box?.isOpen ?? false) {
       box = OG_HiveInterface._chosen_alias_box  ?? await Hive.openBox('chosen_alias');

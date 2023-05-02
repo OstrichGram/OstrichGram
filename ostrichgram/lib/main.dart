@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'my_paint.dart';
 import 'top_container.dart';
+import 'dart:convert';
 import 'right_panel.dart';
 import 'dart:async';
 import 'render.dart';
@@ -111,6 +112,11 @@ class SplitScreenState extends State<SplitScreen> {
   // For the animation on top if checking signatures takes a while etc
   ValueNotifier<bool> processingWebSocketInfo = ValueNotifier(false);
 
+  // Keep track of the subscription IDs so we can double check the buffer against the request.  This can prevent the wrong messages from showing up in the wrong room if the user clicks around too fast while the buffer is trying to update.
+  // We need two of these because the direct messages have 2 queries.
+  String currentSubscriptionID1="";
+  String currentSubscriptionID2="";
+
   // This loop should run every 3 seconds to update the right panel based on listening to the websocket.
   Future<void> _fetchDataFromWebSocketBuffer() async {
 
@@ -131,14 +137,42 @@ class SplitScreenState extends State<SplitScreen> {
 
     // Get anything new from the websocket buffer.
     List<String> fetchedData = websocketmanager.collectWebSocketBuffer();
+    List<dynamic> singleEvent=[];
+    String my_event = "";
+    String my_event_id ="";
 
+    for (int i = fetchedData.length - 1; i >= 0; i--) {
+      my_event = fetchedData[i];
+        singleEvent = jsonDecode(my_event);
+
+        //Grab the "EVENT" part of the event to get the subscription id.
+        for (int i = 0; i < singleEvent.length - 1; i++) {
+          if (singleEvent[i] == "EVENT") {
+            my_event_id= singleEvent[i + 1];
+            break;
+          }
+        }
+
+        if (my_event_id != currentSubscriptionID1 && my_event_id != currentSubscriptionID2) {
+          // If the event subscription is not one of our current subscriptions id, remove it.  This also handles EOSE.
+           fetchedData.removeAt(i);
+        }
+
+    } // End For loop
 
     List<Map<String, String>> formattedData = [];
 
     if (fetchedData.isNotEmpty) {
 
+
       processingWebSocketInfo.value = true;
-      formattedData = await compute(nostr_core.processWebSocketData, {"fetchedData": fetchedData });
+      String hiveDbPath = OG_HiveInterface.getHiveDbPath();
+
+      formattedData = await compute(
+        nostr_core.processWebSocketData,
+        {"fetchedData": fetchedData, "hiveDbPath": hiveDbPath},
+      );
+
 
       processingWebSocketInfo.value = false;
     }
@@ -254,6 +288,26 @@ class SplitScreenState extends State<SplitScreen> {
   // the main query.
   Future<void> freshWebSocketConnectandSend(String websocketURI, String message,
       {String? secondary_message}) async {
+
+   List<dynamic> messageList = jsonDecode(message);
+    for (int i = 0; i < messageList.length - 1; i++) {
+      if (messageList[i] == "REQ") {
+        currentSubscriptionID1= messageList[i + 1];
+        break;
+      }
+    }
+
+    if (secondary_message != null) {
+      List<dynamic> messageList2 = jsonDecode(secondary_message);
+      for (int i = 0; i < messageList2.length - 1; i++) {
+        if (messageList2[i] == "REQ") {
+          currentSubscriptionID2 = messageList2[i + 1];
+          break;
+        }
+      }
+    }
+
+
     await _initWebSocketConnection(websocketURI);
 
     bool websocketStatus = websocketmanager.isWebSocketOpen();
@@ -828,8 +882,7 @@ class SplitScreenState extends State<SplitScreen> {
     }// END EVENT TYPE.
 
 
-
-    // not sure this is necessary because we should have handled everything but probably can't hurt. leave it unless causing a problem.
+    // call setState to update anything we did at the beginning for a room change, etc
     setState(() {
       _shouldUpdateRowCache = true;
     });
@@ -877,6 +930,8 @@ class SplitScreenState extends State<SplitScreen> {
       // If there's a room change, first close the websocket.
       WebSocketManager().closeWebSocketConnection();
 
+
+      updateShowReplyWidget(false);
       // Next, clear the wiedgets.
       _RightPanelNotifier.value = [];
       _rightPanelUniqueRowId = unique_id;
