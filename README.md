@@ -1,16 +1,16 @@
 
 # OstrichGram
 
-Welcome to OstrichGram, a chat software for the Nostr network.  With OstrichGram, you can join group chatrooms on Nostr, and message your friends, too.
+Welcome to OstrichGram, a chat software for the Nostr network.  With OstrichGram, you can join group chatrooms on Nostr, and message your friends too.
 
 
 ![OstrichGram ](OG-icon.png)
 
 # Warnings
 
-If you're new to Nostr, be forewarned: there is often no "delete button".  Although the nostr protocol has a "request to remove" feature, it is not implemented widely yet, and there is no guarantee all relays support it.  OstrichGram doesn't have a delete messages feature.  In general, Nostr is decentralized. It's an open protocol, and there's no company to call to ask for help. Please use nostr and OstrichGram carefully and not for anything sensitive, embarrasing, or otherwise harmful.  
+If you're new to Nostr, be forewarned: there is often no "delete button".  Although the nostr protocol has a "request to remove" feature, it is not implemented widely yet, and there is no guarantee all relays support it.  OstrichGram doesn't have a delete messages feature.  In general, Nostr is decentralized. It's an open protocol, and there's no company to call to ask for help. Please use Nostr and OstrichGram carefully and not for anything sensitive, embarrasing, or otherwise harmful.  
 
-Open source software like OstrichGram may potentially have bugs and comes with "no warranty of merchantibility" under its liscence.  The early releases of OstrichGram are considered "Beta" software because they haven't been widely tested yet. Use carefully on your own discretion.
+Open source software like OstrichGram may potentially have bugs and comes with "no warranty of merchantibility" under its licensee.  The early releases of OstrichGram are considered "Beta" software because they haven't been widely tested yet. Use carefully on your own discretion.
 
 # Overview & Features
  
@@ -47,17 +47,19 @@ The users' own icon is represented by an Ostrich and the application will rotate
 # The Database
 
 The application will create OstrichGram_DB.hive in your MyDocuments folder. It is recommended to backup the database periodically.
-If you want to know more about the Database structure, you can read the code comment block in og_hive_interface.dart.
+If you want to know more about the Database structure, you can read the code comment block in og_hive_interface.dart.  If you want
+to clear the cache, or believe the messages somehow got corrupted, you can safely delete just the "messages_group.hive", "messages_friend.hive",
+and "messages_relay.hive" files.  These just contain messages.
 
 # How to Download and Run OstrichGram
 
-First, download the files. The release files are here: [https://ostrichgram.com/Downloads/](https://ostrichgram.com/Downloads) 
+First, visit the latest release: [https://github.com/OstrichGram/OstrichGram/releases](https://github.com/OstrichGram/OstrichGram/releases) and download the zip file, then unzip it on your computer.
 
-For linux desktop, download the linux-build.zip file, unzip it, and navigate to build/linux/x64/release/bundle, and then run Ostrichgram by clicking on the icon.  
+For linux desktop, navigate to build/linux/x64/release/bundle, and then run Ostrichgram by clicking on the icon.  
 
-For Windows desktop, download the windows-build.zip file, unzip it, and navigate to build/windows/runner/Release,  and then run Ostrichgram by clicking on the icon.
+For Windows desktop, navigate to build/windows/runner/Release,  and then run Ostrichgram by clicking on the icon.
 
-Be aware that you can't simply copy the single file and move it to another location.  You need the entire build folder, as this contains required libraries and dll files, etc. This is apparently the standard way to deploy flutter projects.
+Be aware that you can't simply copy the single file and move it to another location.  You need the entire build folder, as this contains required libraries and dll files, etc. This is apparently the standard way to deploy flutter projects.  You don't need anything other than the build folder, unless you want to review the source code.
 
 # How to use OstrichGram
 
@@ -81,7 +83,6 @@ Make sure you have the Flutter SDK.  Navigate to the project folder (ostrichgram
 
 `flutter config --enable-linux-desktop`.
 
-
 Next, create the required supporting files with:
 
 `flutter create . `
@@ -102,11 +103,13 @@ You can also handle certain issues with:
 
 ## For Windows Desktop
 
-First install the necessary build tools.  The normal recommendation for installing flutter is by installing Visual Studio with Desktop development C++ workload, although you do not need to open Visual Studio to build the project.  After installing visual studio, run:
+First install the necessary build tools.  The normal recommendation for installing flutter is by installing Visual Studio with Desktop development C++ workload, although you do not need to open Visual Studio to build the project. 
 
-`flutter doctor` to make sure there's no issues.
+After installing visual studio, open a command prompt and navigate to the project folder (ostrichgram).
 
-Then, open a command prompt and navigate to the project folder (ostrichgram).  Run this:
+Run `flutter doctor` to make sure there's no issues.
+  
+Then run this:
 
 `flutter config --enable-windows-desktop`
 
