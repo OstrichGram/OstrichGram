@@ -1,0 +1,10 @@
+^D:\FLUTTER\FLUTTER\EXAMPLES\OSTRICHGRAM\BUILD\WINDOWS\CMAKEFILES\1096782F7C3FAC287CB8B56A09B7BC7A\INSTALL_FORCE.RULE
+setlocal
+cd .
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

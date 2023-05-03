@@ -1,0 +1,16 @@
+D:/Flutter/flutter/examples/ostrichgram/build/windows/CMakeFiles/INSTALL.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/CMakeFiles/ALL_BUILD.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/CMakeFiles/ZERO_CHECK.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/flutter/CMakeFiles/flutter_wrapper_plugin.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/flutter/CMakeFiles/flutter_wrapper_app.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/flutter/CMakeFiles/flutter_assemble.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/flutter/CMakeFiles/INSTALL.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/runner/CMakeFiles/OstrichGram.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/runner/CMakeFiles/INSTALL.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/runner/CMakeFiles/ALL_BUILD.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/plugins/url_launcher_windows/CMakeFiles/url_launcher_windows_plugin.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/plugins/url_launcher_windows/CMakeFiles/INSTALL.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/plugins/url_launcher_windows/CMakeFiles/ALL_BUILD.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/plugins/window_size/CMakeFiles/window_size_plugin.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/plugins/window_size/CMakeFiles/INSTALL.dir
+D:/Flutter/flutter/examples/ostrichgram/build/windows/plugins/window_size/CMakeFiles/ALL_BUILD.dir

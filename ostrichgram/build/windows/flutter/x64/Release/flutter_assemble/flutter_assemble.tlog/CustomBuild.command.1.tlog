@@ -1,0 +1,28 @@
+^D:\FLUTTER\FLUTTER\EXAMPLES\OSTRICHGRAM\BUILD\WINDOWS\CMAKEFILES\A792B9DF97F49F077998DDE5221DABBC\FLUTTER_WINDOWS.DLL.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E env FLUTTER_ROOT=D:\Flutter\flutter PROJECT_DIR=D:\Flutter\flutter\examples\ostrichgram FLUTTER_ROOT=D:\Flutter\flutter FLUTTER_EPHEMERAL_DIR=D:\Flutter\flutter\examples\ostrichgram\windows\flutter\ephemeral PROJECT_DIR=D:\Flutter\flutter\examples\ostrichgram FLUTTER_TARGET=lib\main.dart DART_OBFUSCATION=false TRACK_WIDGET_CREATION=true TREE_SHAKE_ICONS=true PACKAGE_CONFIG=D:\Flutter\flutter\examples\ostrichgram\.dart_tool\package_config.json D:/Flutter/flutter/packages/flutter_tools/bin/tool_backend.bat windows-x64 Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^D:\FLUTTER\FLUTTER\EXAMPLES\OSTRICHGRAM\BUILD\WINDOWS\CMAKEFILES\A46F2B1BCE0E4F2277498196E43F1FF9\FLUTTER_ASSEMBLE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^D:\FLUTTER\FLUTTER\EXAMPLES\OSTRICHGRAM\WINDOWS\FLUTTER\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SD:/Flutter/flutter/examples/ostrichgram/windows -BD:/Flutter/flutter/examples/ostrichgram/build/windows --check-stamp-file D:/Flutter/flutter/examples/ostrichgram/build/windows/flutter/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
