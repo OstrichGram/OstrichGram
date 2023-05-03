@@ -10,7 +10,7 @@ Welcome to OstrichGram, a chat software for the Nostr network.  With OstrichGram
 
 If you're new to Nostr, be forewarned: there is often no "delete button".  Although the nostr protocol has a "request to remove" feature, it is not implemented widely yet, and there is no guarantee all relays support it.  OstrichGram doesn't have a delete messages feature.  In general, Nostr is decentralized. It's an open protocol, and there's no company to call to ask for help. Please use Nostr and OstrichGram carefully and not for anything sensitive, embarrasing, or otherwise harmful.  
 
-Open source software like OstrichGram may potentially have bugs and comes with "no warranty of merchantibility" under its licensee.  The early releases of OstrichGram are considered "Beta" software because they haven't been widely tested yet. Use carefully on your own discretion.
+Open source software like OstrichGram may potentially have bugs and comes with "no warranty of merchantibility" under its license.  The early releases of OstrichGram are considered "Beta" software because they haven't been widely tested yet. Use carefully on your own discretion.
 
 # Overview & Features
  
