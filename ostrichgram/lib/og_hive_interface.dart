@@ -904,6 +904,7 @@ static String getHiveDbPath() {
 
 
   static Future<void> addData_Aliases(String alias, String privkey, String pubkey) async {
+    alias = alias.trim();
     if (alias == "") {
 
     throw Exception('Alias name cannot be blank.');
@@ -965,6 +966,7 @@ static String getHiveDbPath() {
 
   static Future<void> updateData_Friends_UpdateNameandRelay(String pubkey, String newFriendName, String newRelayForDM) async {
 
+    newFriendName=newFriendName.trim();
 
     return _lock.synchronized(() async {
       if (newFriendName == "") {
@@ -974,7 +976,7 @@ static String getHiveDbPath() {
         throw Exception('Contact name cannot be longer than 30 characters.');
       }
 
-      RegExp regExp = new RegExp(r'^[a-zA-Z0-9_-]+$');
+      RegExp regExp = new RegExp(r'^[a-zA-Z0-9 _-]+$');
       if (!regExp.hasMatch(newFriendName)) {
         throw Exception('Contact name should contain only letters and numbers.');
       }
@@ -1003,6 +1005,7 @@ static String getHiveDbPath() {
 
 
   static Future<void> addData_Friends(String friend, String pubkey, String avatar_style, String left_panel_position, String relay_for_DM) async {
+    friend=friend.trim();
     return _lock.synchronized(() async {
       if (friend == "") {
         throw Exception('Contact name cannot be blank.');
@@ -1011,7 +1014,7 @@ static String getHiveDbPath() {
         throw Exception('Contact name cannot be longer than 30 characters.');
       }
 
-      RegExp regExp = new RegExp(r'^[a-zA-Z0-9_-]+$');
+      RegExp regExp = new RegExp(r'^[a-zA-Z0-9 _-]+$');
       if (!regExp.hasMatch(friend)) {
         throw Exception('Contact name should contain only letters and numbers.');
       }

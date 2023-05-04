@@ -173,6 +173,11 @@ class SplitScreenState extends State<SplitScreen> {
         {"fetchedData": fetchedData, "hiveDbPath": hiveDbPath},
       );
 
+      formattedData = formattedData.where((singleItemMap) {
+        String mySubscription = singleItemMap['subscription'] ?? "";
+        return mySubscription == currentSubscriptionID1 ||
+            mySubscription == currentSubscriptionID2;
+      }).toList();
 
       processingWebSocketInfo.value = false;
     }

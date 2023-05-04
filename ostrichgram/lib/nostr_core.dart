@@ -363,12 +363,15 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
 
     List<Map<String, String>> processedData = [];
 
+    // Handle the subscription ID.
+    String subscriptionID ="";
 
     for (String string in fetchedData) {
    // fetchedData.forEach((string) {
       List<dynamic> data = jsonDecode(string);
       if (data.length > 2 && data[2] is Map<String, dynamic>) {
         Map<String, dynamic> eventData = data[2];
+        subscriptionID = data[1];
         if (eventData['id'] != null) {
           // Serialize the event data
           List<dynamic> serializedEventData = [
@@ -421,6 +424,7 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
                 'tags': jsonEncode(eventData['tags']),
                 'content': eventData['content'].toString(),
                 'sig': eventData['sig'].toString(),
+                'subscription': subscriptionID.toString(),
               };
               processedData.add(stringData);
             }
