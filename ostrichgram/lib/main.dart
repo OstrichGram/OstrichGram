@@ -311,6 +311,10 @@ class SplitScreenState extends State<SplitScreen> {
         }
       }
     }
+    else {
+      // empty this out otherwise if the previous query was a DM room, the secondary ID can get into the message cache incorrectly.
+      currentSubscriptionID2="";
+    }
 
 
     await _initWebSocketConnection(websocketURI);
