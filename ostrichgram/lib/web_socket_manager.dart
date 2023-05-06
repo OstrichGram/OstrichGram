@@ -10,8 +10,8 @@ with a websocket, pass any messages needed, and put all responses into a buffer 
 periodically from the main.dart.  There is an inactivity timeout , an initial connection timeout,
 and some size limits implemented.
 
-The app is designed to only have one primary connection to one relay open at a time, with some secondary
-connections implemented in the future for the content manager.
+The app development began with neo primary connection implemented in this class to use  one relay open at a time, with some secondary
+connections implemented in the future for the content manager.  But subsequently, we have web_socket_manager_multi.dart.
 
  */
 
@@ -93,8 +93,6 @@ class WebSocketManager {
 
           // data is the key variable here that's added to the buffer.
           _bufferSize += data.length as int;
-
-
           _buffer.add(data);
 
           List<dynamic> decodedData = jsonDecode(data);

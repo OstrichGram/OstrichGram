@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/parser.dart';
-import 'web_socket_manager.dart';
+import 'web_socket_manager_multi.dart';
 import 'dart:async';
 import 'og_hive_interface.dart';
 import 'main.dart';
@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'ui_helper.dart';
 import 'my_paint.dart';
+import 'global_config.dart';
 
 /*
 
@@ -43,7 +44,7 @@ class TopContainer extends StatefulWidget {
 
 class _TopContainerState extends State<TopContainer>
     with SingleTickerProviderStateMixin {
-  WebSocketManager _webSocketManager = WebSocketManager();
+  WebSocketManagerMulti _webSocketManagerMulti = WebSocketManagerMulti();
   ValueNotifier<int> _isConnected = ValueNotifier(0);
   String _topcontainer_relay = "";
 
@@ -106,7 +107,7 @@ class _TopContainerState extends State<TopContainer>
 
 
   void closeWebSocketConnection() {
-    _webSocketManager.closeWebSocketConnection();
+    _webSocketManagerMulti.closeWebSocketConnection(0);
   }
 
   Future<void> copyAliasNpubToClipboard() async {
@@ -161,12 +162,12 @@ class _TopContainerState extends State<TopContainer>
           });
         }
 
-          _topcontainer_relay = _webSocketManager.uri;
+          _topcontainer_relay = _webSocketManagerMulti.getUri(0);
 
         try {
 
 
-          bool socketState = _webSocketManager.isWebSocketOpen();
+          bool socketState = _webSocketManagerMulti.isWebSocketOpen(0);
           if (socketState) {
             _isConnected.value = 1;
           } else {
@@ -186,10 +187,11 @@ class _TopContainerState extends State<TopContainer>
 
   void reload_top() async {
 
-    WebSocketManager websocketmanager = WebSocketManager();
 
-    if (websocketmanager.isWebSocketOpen()) {
-      websocketmanager.closeWebSocketConnection();
+    WebSocketManagerMulti websocketmanagermulti = WebSocketManagerMulti();
+
+    if (websocketmanagermulti.isWebSocketOpen(0)) {
+      websocketmanagermulti.closeWebSocketConnection(0);
       Future.delayed(Duration(milliseconds: 50)).then((_) {
       });
 
@@ -206,8 +208,12 @@ class _TopContainerState extends State<TopContainer>
 
     if (widget.splitScreenState.roomType == "group"){
 
+
+      final globalConfig = GlobalConfig();
+      int numberItemsToFetch=globalConfig.message_limit;
+
       String e_tag = widget.splitScreenState.rightPanelUniqueRowId.split(',')[0];
-      String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag);
+      String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag,numberItemsToFetch);
       try { await widget.splitScreenState.freshWebSocketConnectandSend(_topcontainer_relay, requestKind42s);
       }
       catch (e) {
@@ -263,7 +269,7 @@ class _TopContainerState extends State<TopContainer>
   Future<DataFromDB> _getDataFromDB() async {
 
     // Define this first for the case of a new user and we have to return early.
-    String relay_name = _webSocketManager.uri ?? '';
+    String relay_name = _webSocketManagerMulti.getUri(0) ?? '';
 
     Map<String, String> chosenAliasData =
         await OG_HiveInterface.getData_Chosen_Alias_Map();

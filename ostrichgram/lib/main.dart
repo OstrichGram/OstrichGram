@@ -6,7 +6,7 @@ import 'alias_screen.dart';
 import 'og_hive_interface.dart';
 import 'content_manager.dart';
 import 'nostr_core.dart';
-import 'web_socket_manager.dart';
+import 'web_socket_manager_multi.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'my_paint.dart';
@@ -16,11 +16,13 @@ import 'right_panel.dart';
 import 'dart:async';
 import 'render.dart';
 import 'og_util.dart';
+import 'global_config.dart';
 import 'settings_screen.dart';
 import 'input_bar_container.dart';
 import 'og_emoji_picker.dart';
 import 'about_screen.dart';
 import 'package:flutter/foundation.dart';
+
 /*
 
 Main.dart is the main file for the application, and SplitScreenState is the main class that holds a split-screen
@@ -76,7 +78,7 @@ class SplitScreenState extends State<SplitScreen> {
   OverlayEntry? _emojiPickerOverlay;
   bool _dataReady = false;
   final ScrollController _scrollController = ScrollController();
-  final WebSocketManager websocketmanager = WebSocketManager();
+  final WebSocketManagerMulti websocketmanagermulti = WebSocketManagerMulti();
   String _mainWebSocketURI = "";
   String _roomType = ""; // Values: "relay" "group" "friend"
   String _rightPanelRoomName = "";
@@ -136,7 +138,27 @@ class SplitScreenState extends State<SplitScreen> {
     }
 
     // Get anything new from the websocket buffer.
-    List<String> fetchedData = websocketmanager.collectWebSocketBuffer();
+    List<String> fetchedData = websocketmanagermulti.collectWebSocketBuffer(0);
+    int mostRecentTimeBeforeEOSE = OG_util.getMostRecentTimeBeforeEOSE(fetchedData);
+
+    // Grab the original request message so we can get the group_id.
+    String currentRequest=websocketmanagermulti.getCurrentRequest(0);
+    String eTag = OG_util.getEtagValueFromRequest(currentRequest);
+    if (eTag!="") {
+
+      // if mostRecentTimeBeforeEOSE is 0, that means there were no events returned.  We only want to update the DB if its non-zero, otherwise we'll overwrite the watermark.
+
+      mostRecentTimeBeforeEOSE--;
+      if (mostRecentTimeBeforeEOSE>0) {
+        try {
+          await OG_HiveInterface.updateOrInsert_MessagesGroupCacheWatermark(
+              eTag, mostRecentTimeBeforeEOSE);
+        } catch (e) {}
+      }
+
+    } // endif eTag != null
+
+
     List<dynamic> singleEvent=[];
     String my_event = "";
     String my_event_id ="";
@@ -230,7 +252,8 @@ class SplitScreenState extends State<SplitScreen> {
       // Update the cache variable for next time.
       _cachedWidgetData = mergedData;
     }
-  }
+
+  }  //end of fetchDataFromWebSocketBuffer
 
   // Get Cache Info depending on type
   Future<List<Map<String, String>>> fetchDbDataMessages(
@@ -291,9 +314,24 @@ class SplitScreenState extends State<SplitScreen> {
 
   // This is a primary function for establishing a websocket connection and sending
   // the main query.
-  Future<void> freshWebSocketConnectandSend(String websocketURI, String message,
-      {String? secondary_message}) async {
 
+  Future<void> freshWebSocketConnectandSend(String websocketURI, String message,
+      {String? secondary_message, bool storeRequest = false}) async {
+
+   // If this is a kind 42 message, get the cache watermark so we can include it in the query.
+    if (OG_util.isKind42Request(message)) {
+      int watermark_since = 0;
+      String eTag=OG_util.getEtagValueFromRequest(message);
+      try {
+        Map<String,dynamic> groupCacheMap = await OG_HiveInterface.getData_GroupCacheWatermark(eTag);
+        watermark_since = groupCacheMap['since'];
+      } catch (e) {
+      }
+      // include it in the query.
+      message = OG_util.addTimeStampFiltersToQuery(message, since:watermark_since);
+    }
+
+    // Get the subscription IDs
    List<dynamic> messageList = jsonDecode(message);
     for (int i = 0; i < messageList.length - 1; i++) {
       if (messageList[i] == "REQ") {
@@ -319,17 +357,17 @@ class SplitScreenState extends State<SplitScreen> {
 
     await _initWebSocketConnection(websocketURI);
 
-    bool websocketStatus = websocketmanager.isWebSocketOpen();
+    bool websocketStatus = websocketmanagermulti.isWebSocketOpen(0);
 
     if (websocketStatus) {
-      await websocketmanager.send(message);
+      await websocketmanagermulti.send(0,message,storeRequest: storeRequest);
 
       if (secondary_message != null) {
         Future.delayed(Duration(milliseconds: 100), () {
           // WAIT 100 MS just so we don't try to send too much too fast.
           ;
         });
-        await websocketmanager.send(secondary_message);
+        await websocketmanagermulti.send(0,secondary_message);
       }
     } else {
       print('WebSocket is not open, cannot send message');
@@ -341,8 +379,7 @@ class SplitScreenState extends State<SplitScreen> {
   Future<void> _initWebSocketConnection(String websocketURI) async {
     try {
       int connected = 1; // start in error state. 0 = connected.
-      connected = await websocketmanager.openPersistentWebSocket(websocketURI);
-
+      connected = await websocketmanagermulti.openPersistentWebSocket(0,websocketURI);
       setState(() {
 
       });
@@ -664,8 +701,11 @@ class SplitScreenState extends State<SplitScreen> {
       String relay = unique_id.split(',')[1].trim();
       String e_tag = unique_id.split(',')[0].trim();
 
+      final globalConfig = GlobalConfig();
+      int numberItemsToFetch=globalConfig.message_limit;
+
       // Fetch all messages in the group.
-      String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag);
+      String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag,numberItemsToFetch);
 
       // Get the group name.
       String group_label = "";
@@ -689,7 +729,7 @@ class SplitScreenState extends State<SplitScreen> {
 
       // Fetch the group chat messages via the websocket.
       try {
-        await freshWebSocketConnectandSend(relay, requestKind42s);
+        await freshWebSocketConnectandSend(relay, requestKind42s,storeRequest: true);
       } catch (e) {
         print(
             "There was a problem establishing a new websocket connection: $e");
@@ -937,7 +977,7 @@ class SplitScreenState extends State<SplitScreen> {
     if (_roomChange(eventType, unique_id)) {
 
       // If there's a room change, first close the websocket.
-      WebSocketManager().closeWebSocketConnection();
+      WebSocketManagerMulti().closeWebSocketConnection(0);
 
 
       updateShowReplyWidget(false);
@@ -1464,7 +1504,7 @@ class SplitScreenState extends State<SplitScreen> {
 
     // If we're in a group chat room...
     if (_roomType == "group") {
-      if (websocketmanager.isWebSocketOpen() == true) {
+      if (websocketmanagermulti.isWebSocketOpen(0) == true) {
 
         String kind42_post = "";
 
@@ -1484,7 +1524,7 @@ class SplitScreenState extends State<SplitScreen> {
         kind42_post = await nostr_core.create_kind42_post(e_tag, post_content,
             e_Tag_Reply: reply_e_Tag, p_Tag_Reply: reply_p_Tag);
 
-        websocketmanager.send(kind42_post);
+        websocketmanagermulti.send(0,kind42_post);
       } else {
         print("WEBSOCKET NOT OPEN!");
       }
@@ -1492,13 +1532,13 @@ class SplitScreenState extends State<SplitScreen> {
 
     // For a direct message...
     if (_roomType == "friend") {
-      if (websocketmanager.isWebSocketOpen() == true) {
+      if (websocketmanagermulti.isWebSocketOpen(0) == true) {
         //ATTEMPT TO POST
         String kind04_post = "";
         String friend_pubkey = _rightPanelUniqueRowId;
         kind04_post =
             await nostr_core.create_kind04_post(friend_pubkey, post_content);
-        websocketmanager.send(kind04_post);
+        websocketmanagermulti.send(0,kind04_post);
       } else {
         print("WEBSOCKET NOT OPEN!");
       }

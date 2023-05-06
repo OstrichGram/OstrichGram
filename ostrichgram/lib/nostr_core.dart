@@ -310,9 +310,9 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
   }
 
 
-  static String constructJSON_fetch_kind_42s(String e_tag) {
+  static String constructJSON_fetch_kind_42s(String e_tag,int limit) {
     final globalConfig = GlobalConfig();
-    int limit = globalConfig.message_limit;
+
     String subscription_id = generateRandomSubscriptionString();
 
     List<dynamic> requestData = [

@@ -22,6 +22,7 @@ import 'dart:convert';
   messages_group.hive - holds group messages. Each key is a composite of the group id and a unique message id
   messages_relay.hive - holds list of chatrooms for each relay
   relays.hive - holds list of relays
+  messages_group_cache_watermark.hive - holds list of group IDs and the most recent created_at timestamp that we fetched.
 
    */
 
@@ -37,6 +38,7 @@ class OG_HiveInterface {
   static  Box? _messages_group_box;
   static  Box? _messages_friend_box;
   static  Box? _config_settings_box;
+  static  Box? _messages_group_cache_watermark_box;
   static late Directory appDocumentDir;
   static late String hiveDbPath;
   static final _lock = Lock();
@@ -54,7 +56,9 @@ class OG_HiveInterface {
 
      appDocumentDir = await getApplicationDocumentsDirectory();
       hiveDbPath = "${appDocumentDir.path}/OstrichGram_DB.hive";
-
+    if (!await appDocumentDir.exists()) {
+      await appDocumentDir.create();
+    }
     _friends_box = await Hive.openBox('friends',path: hiveDbPath);
     _alias_box = await Hive.openBox('aliases', path: hiveDbPath);
     _relays_box = await Hive.openBox('relays', path: hiveDbPath);
@@ -64,6 +68,7 @@ class OG_HiveInterface {
     _messages_group_box = await Hive.openBox('messages_group', path: hiveDbPath);
     _messages_friend_box = await Hive.openBox('messages_friend', path: hiveDbPath);
     _config_settings_box = await Hive.openBox('config_settings', path: hiveDbPath);
+    _messages_group_cache_watermark_box = await Hive.openBox('messages_group_cache_watermark', path: hiveDbPath);
     _isInitialized = true;
   }
 
@@ -111,6 +116,47 @@ static String getHiveDbPath() {
   }
 
 
+  static Future<Map<String, dynamic>> getData_GroupCacheWatermark(String group_id) async {
+    if (group_id.isEmpty) {
+      throw Exception('Group ID cannot be blank.');
+    }
+
+    Box box;
+    if (OG_HiveInterface._messages_group_cache_watermark_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_group_cache_watermark_box ??
+          await Hive.openBox('messages_group_cache_watermark');
+    } else {
+      box = await Hive.openBox('messages_group_cache_watermark', path: hiveDbPath);
+    }
+
+    final groupMap = box.get(group_id, defaultValue: null);
+    return groupMap;
+  }
+
+
+  static Future<void> updateOrInsert_MessagesGroupCacheWatermark(
+      String group_id, int createdAt) async {
+    if (group_id.isEmpty) {
+      throw Exception('Group ID cannot be blank.');
+      return;
+    }
+
+    Box box;
+    if (OG_HiveInterface._messages_group_cache_watermark_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_group_cache_watermark_box ??
+          await Hive.openBox ('messages_group_cache_watermark');
+    } else {
+      box = await Hive.openBox ('messages_group_cache_watermark',
+          path: hiveDbPath);
+    }
+
+    // If the group_id already exists in the box, update its value; otherwise, put a new entry.
+    if (box.containsKey(group_id)) {
+      box.put(group_id, {'createdAt': createdAt.toString()});
+    } else {
+      box.put(group_id, {'createdAt': createdAt.toString()});
+    }
+  }
 
   static Future<void> updateOrInsert_Chosen_Alias(String? alias) async {
     Box box;
@@ -132,13 +178,6 @@ static String getHiveDbPath() {
   }
 
 
-
-
-
-
-////////////////////
-
-
   static Future<List> getListofRelays() async {
     Box box;
     if (OG_HiveInterface._relays_box?.isOpen ?? false) {
@@ -150,10 +189,6 @@ static String getHiveDbPath() {
     return rows.toList(); // convert the Iterable to a List and return it
   }
 
-
-
-
-  ////////////////////////////////////////
 
   static Future<List> getListofAliases() async {
 
@@ -618,32 +653,6 @@ static String getHiveDbPath() {
     }
   }
 
-
-
-  static Future<void> addData_MessagesFriend_old(String pubkey, List<Map<String, String>> messages, {bool WipePreviousCacheforComposite = false}) async {
-    Box box;
-    if (OG_HiveInterface._messages_friend_box?.isOpen ?? false) {
-      box = OG_HiveInterface._messages_friend_box ?? await Hive.openBox('messages_friend');
-    } else {
-      box = await Hive.openBox('messages_friend', path: hiveDbPath);
-    }
-
-    String keyPrefix = '${pubkey}_';
-    if (WipePreviousCacheforComposite) {
-      // Delete all rows with the specified prefix
-      for (var key in box.keys) {
-        if (key.toString().startsWith(keyPrefix)) {
-          await box.delete(key);
-        }
-      }
-    }
-
-    // Insert new rows
-    for (Map<String, String> message in messages) {
-      String compositeKey = '${pubkey}_${message["id"]}';
-      await box.put(compositeKey, message);
-    }
-  }
 
   static Future<void> addData_MessagesGroup(String group, List<Map<String, String>> messages, {bool WipePreviousCacheforComposite = false}) async {
     Box box;

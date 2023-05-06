@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'nostr_core.dart';
-import 'web_socket_manager.dart';
+import 'web_socket_manager_multi.dart';
 import 'package:flutter/services.dart';
 import 'main.dart';
 
@@ -23,7 +23,7 @@ class InputBarContainer extends StatefulWidget {
 
 class InputBarState extends State<InputBarContainer> {
   FocusNode _focusNode = FocusNode();
-  WebSocketManager webSocketManager = WebSocketManager();
+  WebSocketManagerMulti webSocketManagerMulti = WebSocketManagerMulti();
 
   int inputBarDisplayType = 1;  // 1 = Show the normal bar.   // 2 = Show add group button //3 = nothing
 
@@ -92,7 +92,7 @@ class InputBarState extends State<InputBarContainer> {
     String kind40_post = "";
     kind40_post = await nostr_core.create_kind40_post(name.trim(), about.trim());
 
-    webSocketManager.send(kind40_post);
+    webSocketManagerMulti.send(0,kind40_post);
 
     return null;
   }
