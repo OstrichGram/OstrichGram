@@ -23,6 +23,8 @@ import 'dart:convert';
   messages_relay.hive - holds list of chatrooms for each relay
   relays.hive - holds list of relays
   messages_group_cache_watermark.hive - holds list of group IDs and the most recent created_at timestamp that we fetched.
+  messages_fatgroup.hive -- messages for fatgroups
+  fatgroups.hive - holds fat groups (a fat group is a multi relay chat).
 
    */
 
@@ -33,9 +35,11 @@ class OG_HiveInterface {
   static  Box?  _alias_box;
   static  Box?  _relays_box;
   static  Box? _groups_box;
+  static  Box? _fat_groups_box;
   static  Box? _chosen_alias_box;
   static  Box? _messages_relay_box;
   static  Box? _messages_group_box;
+  static  Box? _messages_fat_group_box;
   static  Box? _messages_friend_box;
   static  Box? _config_settings_box;
   static  Box? _messages_group_cache_watermark_box;
@@ -65,10 +69,15 @@ class OG_HiveInterface {
 
     _chosen_alias_box = await Hive.openBox('chosen_alias', path: hiveDbPath);
     _groups_box = await Hive.openBox('groups', path: hiveDbPath);
+    _fat_groups_box = await Hive.openBox('fat_groups', path: hiveDbPath);
+
     _messages_group_box = await Hive.openBox('messages_group', path: hiveDbPath);
+
+    _messages_fat_group_box = await Hive.openBox('messages_fat_group', path: hiveDbPath);
     _messages_friend_box = await Hive.openBox('messages_friend', path: hiveDbPath);
     _config_settings_box = await Hive.openBox('config_settings', path: hiveDbPath);
     _messages_group_cache_watermark_box = await Hive.openBox('messages_group_cache_watermark', path: hiveDbPath);
+
     _isInitialized = true;
   }
 
@@ -287,6 +296,16 @@ static String getHiveDbPath() {
     return rows.toList(); // convert the Iterable to a List and return it
   }
 
+  static Future<List> getListofFatGroups() async {
+    Box box;
+    if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
+      box = OG_HiveInterface._fat_groups_box  ?? await Hive.openBox('fat_groups');
+    } else {
+      box = await Hive.openBox('fat_groups', path: hiveDbPath);
+    }
+    final rows = box.values.where((row) => row['fat_group'] != null);
+    return rows.toList(); // convert the Iterable to a List and return it
+  }
 
   static Future<String> getData_PubekyFromFriend(String friend) async {
     Box box;
@@ -511,6 +530,29 @@ static String getHiveDbPath() {
     return messages;
   }
 
+
+  static Future<List<Map<String, String>>> getMessagesForFatGroup(String group) async {
+    Box box;
+    if (OG_HiveInterface._messages_fat_group_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_fat_group_box ?? await Hive.openBox('messages_fat_group');
+    } else {
+      box = await Hive.openBox('messages_fat_group', path: hiveDbPath);
+    }
+
+    String keyPrefix = '${group}_';
+    List<Map<String, String>> messages = [];
+
+    for (var key in box.keys) {
+      if (key.toString().startsWith(keyPrefix)) {
+        messages.add(box.get(key).cast<String, String>());
+      }
+    }
+
+    return messages;
+  }
+
+
+
   static Future<List<Map<String, String>>> getMessagesForGroup(String group) async {
     Box box;
     if (OG_HiveInterface._messages_group_box?.isOpen ?? false) {
@@ -530,6 +572,8 @@ static String getHiveDbPath() {
 
     return messages;
   }
+
+
 
   static Future<List<Map<String, String>>> getMessagesForFriend(String pubkey) async {
     Box box;
@@ -679,6 +723,32 @@ static String getHiveDbPath() {
     }
   }
 
+  static Future<void> addData_MessagesFatGroup(String group, List<Map<String, String>> messages, {bool WipePreviousCacheforComposite = false}) async {
+    Box box;
+    if (OG_HiveInterface._messages_fat_group_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_fat_group_box ?? await Hive.openBox('messages_fat_group');
+    } else {
+      box = await Hive.openBox('messages_fat_group', path: hiveDbPath);
+    }
+
+    String keyPrefix = '${group}_';
+    if (WipePreviousCacheforComposite) {
+      // Delete all rows with the specified prefix
+      for (var key in box.keys) {
+        if (key.toString().startsWith(keyPrefix)) {
+          await box.delete(key);
+        }
+      }
+    }
+
+    // Insert new rows
+    for (Map<String, String> message in messages) {
+      String compositeKey = '${group}_${message["id"]}';
+      await box.put(compositeKey, message);
+    }
+  }
+
+
   static Future<void> addData_MessagesRelay(String relay, List<Map<String, String>> messages, {bool WipePreviousCacheforComposite = false}) async {
     Box box;
     if (OG_HiveInterface._messages_relay_box?.isOpen ?? false) {
@@ -780,6 +850,48 @@ static String getHiveDbPath() {
     }
   }
 
+  static Future<void> addData_FatGroups(String group, String left_panel_position, {required Map<String, dynamic> aux_data}) async {
+
+    if (group == "") {
+
+      throw Exception('Relay cannot be blank.');
+      return;
+    }
+    if (group.length > 200) {
+
+      throw Exception('Relay cannot be longer than 200 characters.');
+      return;
+    }
+
+    Box box;
+    if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
+      box = OG_HiveInterface._fat_groups_box  ?? await Hive.openBox('fat_groups');
+    } else {
+      box = await Hive.openBox('fat_groups',path: hiveDbPath);
+    }
+
+    final existingGroup = box.values.firstWhereOrNull(
+          (map) => map['fat_group'] == group,
+    );
+
+    if (existingGroup == null) {
+      await box.add({
+        'group': group,
+        'left_panel_position': left_panel_position,
+        'id': aux_data['id'],
+        'pubkey': aux_data['pubkey'],
+        'created_at': aux_data['created_at'],
+        'kind': aux_data['kind'],
+        'tags': jsonEncode(aux_data['tags']),
+        'content': jsonEncode(aux_data['content']),
+        'sig': aux_data['sig']
+      });
+
+    } else {
+      throw Exception('You already have this group.');
+    }
+  }
+
   static Future<void> setLeftPanelPositionFriend(String pubkey, String left_panel_position) async {
     Box box;
     if (OG_HiveInterface._friends_box?.isOpen ?? false) {
@@ -825,6 +937,28 @@ static String getHiveDbPath() {
     }
   }
 
+  static Future<void> setLeftPanelPositionFatGroup(String group, String left_panel_position) async {
+
+    Box box;
+    if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
+      box = OG_HiveInterface._fat_groups_box ?? await Hive.openBox('fat_groups');
+    } else {
+      box = await Hive.openBox('fat_groups', path: hiveDbPath);
+    }
+
+    final existingGroupKey = box.keys.firstWhereOrNull(
+          (key) => box.get(key)['fat_group'] == group,
+    );
+
+    if (existingGroupKey != null) {
+      await box.put(existingGroupKey, {
+        ...box.get(existingGroupKey),
+        'left_panel_position': left_panel_position,
+      });
+    } else {
+      throw Exception('Group not found.');
+    }
+  }
 
   static Future<void> setLeftPanelPositionRelay(String relay, String left_panel_position) async {
     Box box;
@@ -863,6 +997,22 @@ static String getHiveDbPath() {
     return existingGroup != null;
   }
 
+
+
+  static Future<bool> fatGroupExists(String group) async {
+    Box box;
+    if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
+      box = OG_HiveInterface._fat_groups_box ?? await Hive.openBox('fat_groups');
+    } else {
+      box = await Hive.openBox('fat_groups', path: hiveDbPath);
+    }
+
+    final existingGroup = box.values.firstWhereOrNull(
+          (map) => map['fat_group'] == group,
+    );
+
+    return existingGroup != null;
+  }
 
   static Future<String> get_Highest_Left_Panel_Position() async {
 
@@ -1107,6 +1257,27 @@ static String getHiveDbPath() {
       if (row != null) {
         final relayValue = row["relay"];
         if (relayValue != null && relayValue == relay) {
+          rowsToDelete.add(i);
+        }
+      }
+    }
+    rowsToDelete.reversed.forEach((index) => box.deleteAt(index));
+    await box.compact();
+  }
+
+  static Future<void> deleteFatGroup(String group) async {
+    Box box;
+    if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
+      box = OG_HiveInterface._fat_groups_box ?? await Hive.openBox('fat_groups', path: hiveDbPath);
+    } else {
+      box = await Hive.openBox('fat_groups',path: hiveDbPath);
+    }
+    final rowsToDelete = <int>[];
+    for (int i = 0; i < box.length; i++) {
+      final row = box.getAt(i);
+      if (row != null) {
+        final groupValue = row["fat_group"];
+        if (groupValue != null && groupValue == group) {
           rowsToDelete.add(i);
         }
       }
