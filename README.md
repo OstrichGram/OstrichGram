@@ -8,9 +8,9 @@ Welcome to OstrichGram, a chat software for the Nostr network.  With OstrichGram
 
 # Warnings
 
-If you're new to Nostr, be forewarned: there is often no "delete button".  Although the nostr protocol has a "request to remove" feature, it is not implemented widely yet, and there is no guarantee all relays support it.  OstrichGram doesn't have a delete messages feature.  In general, Nostr is decentralized. It's an open protocol, and there's no company to call to ask for help. Please use Nostr and OstrichGram carefully and not for anything sensitive, embarrasing, or otherwise harmful.  
+If you're new to Nostr, be forewarned: there is often no "delete button".  Although the nostr protocol has a "request to remove" feature, it is not implemented widely yet, and there is no guarantee all relays support it.  OstrichGram doesn't have a delete messages feature yet.  In general, Nostr is decentralized. It's an open protocol, and there's no company to call to ask for help. Please use Nostr and OstrichGram carefully and not for anything sensitive, embarrasing, or otherwise harmful.  
 
-Open source software like OstrichGram may potentially have bugs and comes with "no warranty of merchantibility" under its license.  The early releases of OstrichGram are considered "Beta" software because they haven't been widely tested yet. Use carefully on your own discretion.
+Open source software like OstrichGram may potentially have bugs and comes with "no warranty of merchantibility" under its license.   Use carefully on your own discretion.
 
 # Overview & Features
  
@@ -28,11 +28,11 @@ Open source software like OstrichGram may potentially have bugs and comes with "
  
 # Some Details and Considerations
 
-OstrichGram has a primary websocket connection that it manages and only has one connection open at a time.  There is a content manager that runs on a timer to keep up with caching messages other than the active window, but that is only partially implemented, so at this time, it's just one connection to one relay at a time. Eventually and ideally in Nostr, chatrooms are distributed and redundant, but we will leave that for a future version.
+OstrichGram implements multi-relay chats called [Fat Groups](https://github.com/OstrichGram/OstrichGram/blob/main/FATGROUPS.md). However, OstrichGram also supports single-relay chats. It will look at the metadata and decide whether a chat is a normal "Group" or a qualified "Fat Group".  Except when dealing with Fat Groups, OstrichGram operates on a single relay at a time.  
 
 Each contact (friend) has a field you can fill out to specify which relay you are chatting with them on.  It is recommended to use a single relay per friend and don't change it, as the older messages may not show up, although in theory, OstrichGram's caching system is supposed to still store the old messages.
- 
-In general, OstrichGram has a caching feature, but it is a basic implementation meant to show old messages if the user is offline.  It is not yet a timestamp based caching system, which will be needed in the future for larger sets of data. 
+
+OstrichGram caches messages for a better experience, and you can delete the cache from the UI for a certain room.
 
 OstrichGram comes with some saftey features -- there are size limits on the number of events fetched, the size of events, and the size of the overload payload you can download from a websocket.  In the future these will be customizable.
  
@@ -48,8 +48,7 @@ The users' own icon is represented by an Ostrich and the application will rotate
 
 The application will create OstrichGram_DB.hive in your MyDocuments folder. It is recommended to backup the database periodically.
 If you want to know more about the Database structure, you can read the code comment block in og_hive_interface.dart.  If you want
-to clear the cache, or believe the messages somehow got corrupted, you can safely delete just the "messages_group.hive", "messages_friend.hive",
-and "messages_relay.hive" files.  These just contain messages.
+to clear the cache for all types of messages, you can remove the tables in hive that start with "message".
 
 # How to Download and Run OstrichGram
 
