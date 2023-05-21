@@ -14,6 +14,7 @@
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/OS-6-nb.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/OS-3.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/OCEAN.png
+/home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/FATGROUP-35.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/GROUP-25.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/DARK-GALAXY.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/GROUP3.png
@@ -46,5 +47,6 @@
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/OS-6.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/wallpaper1.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/orb1-60.png
+/home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/assets/images/FATGROUP.png
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/data/flutter_assets/version.json
 /home/owner/StudioProjects/ostrichgram/build/linux/x64/release/bundle/lib/libapp.so
