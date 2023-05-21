@@ -23,6 +23,7 @@ import 'dart:convert';
   messages_relay.hive - holds list of chatrooms for each relay
   relays.hive - holds list of relays
   messages_group_cache_watermark.hive - holds list of group IDs and the most recent created_at timestamp that we fetched.
+  messages_fat_group_cache_watermark.hive - holds list of group IDs and the most recent created_at timestamp that we fetched.  Group id can be the id , underscore, relay.
   messages_fatgroup.hive -- messages for fatgroups
   fatgroups.hive - holds fat groups (a fat group is a multi relay chat).
 
@@ -43,6 +44,7 @@ class OG_HiveInterface {
   static  Box? _messages_friend_box;
   static  Box? _config_settings_box;
   static  Box? _messages_group_cache_watermark_box;
+  static  Box? _messages_fat_group_cache_watermark_box;
   static late Directory appDocumentDir;
   static late String hiveDbPath;
   static final _lock = Lock();
@@ -77,6 +79,7 @@ class OG_HiveInterface {
     _messages_friend_box = await Hive.openBox('messages_friend', path: hiveDbPath);
     _config_settings_box = await Hive.openBox('config_settings', path: hiveDbPath);
     _messages_group_cache_watermark_box = await Hive.openBox('messages_group_cache_watermark', path: hiveDbPath);
+    _messages_fat_group_cache_watermark_box = await Hive.openBox('messages_fat_group_cache_watermark', path: hiveDbPath);
 
     _isInitialized = true;
   }
@@ -94,6 +97,13 @@ static String getHiveDbPath() {
   static Future<void> initGroupsBox() async {
     if (_groups_box == null || !(_groups_box?.isOpen ?? false)) {
       _groups_box = await Hive.openBox('groups', path: hiveDbPath);
+    }
+  }
+
+
+  static Future<void> initFatGroupsBox() async {
+    if (_fat_groups_box == null || !(_fat_groups_box?.isOpen ?? false)) {
+      _fat_groups_box = await Hive.openBox('fat_groups', path: hiveDbPath);
     }
   }
 
@@ -129,7 +139,6 @@ static String getHiveDbPath() {
     if (group_id.isEmpty) {
       throw Exception('Group ID cannot be blank.');
     }
-
     Box box;
     if (OG_HiveInterface._messages_group_cache_watermark_box?.isOpen ?? false) {
       box = OG_HiveInterface._messages_group_cache_watermark_box ??
@@ -139,8 +148,50 @@ static String getHiveDbPath() {
     }
 
     final groupMap = box.get(group_id, defaultValue: null);
-    return groupMap;
+    if (groupMap is Map) {
+      return groupMap.cast<String, dynamic>();
+    } else {
+      return <String, dynamic>{};  // Return an empty map if groupMap is not a Map.
+    }
   }
+
+  static Future<Map<String, dynamic>> getData_FatGroupCacheWatermark(String group_id) async {
+    if (group_id.isEmpty) {
+      throw Exception('Group ID cannot be blank.');
+    }
+    Box box;
+    if (OG_HiveInterface._messages_fat_group_cache_watermark_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_fat_group_cache_watermark_box ??
+          await Hive.openBox('messages_fat_group_cache_watermark');
+    } else {
+      box = await Hive.openBox('messages_fat_group_cache_watermark', path: hiveDbPath);
+    }
+
+    final groupMap = box.get(group_id, defaultValue: null);
+    if (groupMap is Map) {
+      return groupMap.cast<String, dynamic>();
+    } else {
+      return <String, dynamic>{};  // Return an empty map if groupMap is not a Map.
+    }
+  }
+
+
+  //for debugging
+/*
+  static int groupMessagesCount()  {
+    if (_messages_group_box == null) {
+      throw Exception('messages group box is not initialized.');
+    }
+    return _messages_group_box!.length;
+  }
+
+  static int getFatGroupsCount()  {
+    if (_fat_groups_box == null) {
+      throw Exception('Fat groups box is not initialized.');
+    }
+    return _fat_groups_box!.length;
+  }
+*/
 
 
   static Future<void> updateOrInsert_MessagesGroupCacheWatermark(
@@ -156,6 +207,53 @@ static String getHiveDbPath() {
           await Hive.openBox ('messages_group_cache_watermark');
     } else {
       box = await Hive.openBox ('messages_group_cache_watermark',
+          path: hiveDbPath);
+    }
+
+    // If the group_id already exists in the box, update its value; otherwise, put a new entry.
+    if (box.containsKey(group_id)) {
+      box.put(group_id, {'createdAt': createdAt.toString()});
+    } else {
+      box.put(group_id, {'createdAt': createdAt.toString()});
+    }
+  }
+
+  static Future<void> dumpCacheFatGroupWatermark(String partialGroupId) async {
+
+    // the partialGrouId is just the actual event id, doesnt include the relay portion.. we want to dump the cache for the chat, so reset all relays on this group.
+    if (partialGroupId.isEmpty) {
+      throw Exception('Partial Group ID cannot be blank.');
+      return;
+    }
+
+    Box box;
+    if (OG_HiveInterface._messages_fat_group_cache_watermark_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_fat_group_cache_watermark_box ??
+          await Hive.openBox('messages_fat_group_cache_watermark');
+    } else {
+      box = await Hive.openBox('messages_fat_group_cache_watermark', path: hiveDbPath);
+    }
+
+    // If the group_id partially matches any keys in the box, update its value to "0"
+    box.keys.where((key) => key.toString().contains(partialGroupId)).forEach((matchingKey) {
+      box.put(matchingKey, {'createdAt': '0'});
+    });
+  }
+
+
+  static Future<void> updateOrInsert_MessagesFatGroupCacheWatermark(
+      String group_id, int createdAt, ) async {
+    if (group_id.isEmpty) {
+      throw Exception('Group ID cannot be blank.');
+      return;
+    }
+
+    Box box;
+    if (OG_HiveInterface._messages_fat_group_cache_watermark_box?.isOpen ?? false) {
+      box = OG_HiveInterface._messages_fat_group_cache_watermark_box ??
+          await Hive.openBox ('messages_fat_group_cache_watermark');
+    } else {
+      box = await Hive.openBox ('messages_fat_group_cache_watermark',
           path: hiveDbPath);
     }
 
@@ -297,6 +395,7 @@ static String getHiveDbPath() {
   }
 
   static Future<List> getListofFatGroups() async {
+
     Box box;
     if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
       box = OG_HiveInterface._fat_groups_box  ?? await Hive.openBox('fat_groups');
@@ -432,7 +531,23 @@ static String getHiveDbPath() {
   }
 
 
-
+  static Future<Map<String, dynamic>> getData_FatGroupMap(String fatGroupId) async {
+    Box box;
+    if (OG_HiveInterface._fat_groups_box?.isOpen ?? false) {
+      box = OG_HiveInterface._fat_groups_box ?? await Hive.openBox('fat_groups');
+    } else {
+      box = await Hive.openBox('fat_groups', path: hiveDbPath);
+    }
+    final fatGroupsMap = box.values.firstWhere(
+          (map) => map['fat_group'] == fatGroupId,
+      orElse: () => null,
+    );
+    if (fatGroupsMap == null) {
+      // Handle the case where the alias is not found in the database.
+      return {};
+    }
+    return fatGroupsMap.cast<String, dynamic>();
+  }
 
   static Future<Map<String, dynamic>> getData_AliasMapFromName(String aliasName) async {
     Box box;
@@ -621,6 +736,32 @@ static String getHiveDbPath() {
     }
   }
 
+
+  static Future<void> removeMessagesForFatGroup(String group) async {    Box box;
+    if (_messages_fat_group_box?.isOpen ?? false) {
+      box = _messages_fat_group_box ?? await Hive.openBox('messages_fat_group');
+    } else {
+      box = await Hive.openBox('messages_fat_group', path: hiveDbPath);
+    }
+
+    String keyPrefix = '${group}_';
+    List<dynamic> keysToRemove = [];
+
+    // Find keys with the specified prefix
+    for (var key in box.keys) {
+      if (key.toString().startsWith(keyPrefix)) {
+        keysToRemove.add(key);
+      }
+    }
+
+    // Remove the keys
+    for (var key in keysToRemove) {
+      await box.delete(key);
+    }
+  }
+
+
+
   static Future<void> removeMessagesForGroup(String group) async {
     Box box;
     if (_messages_group_box?.isOpen ?? false) {
@@ -724,6 +865,7 @@ static String getHiveDbPath() {
   }
 
   static Future<void> addData_MessagesFatGroup(String group, List<Map<String, String>> messages, {bool WipePreviousCacheforComposite = false}) async {
+
     Box box;
     if (OG_HiveInterface._messages_fat_group_box?.isOpen ?? false) {
       box = OG_HiveInterface._messages_fat_group_box ?? await Hive.openBox('messages_fat_group');
@@ -851,7 +993,6 @@ static String getHiveDbPath() {
   }
 
   static Future<void> addData_FatGroups(String group, String left_panel_position, {required Map<String, dynamic> aux_data}) async {
-
     if (group == "") {
 
       throw Exception('Relay cannot be blank.');
@@ -859,7 +1000,7 @@ static String getHiveDbPath() {
     }
     if (group.length > 200) {
 
-      throw Exception('Relay cannot be longer than 200 characters.');
+      throw Exception('Gropuname cannot be longer than 200 characters.');
       return;
     }
 
@@ -875,8 +1016,8 @@ static String getHiveDbPath() {
     );
 
     if (existingGroup == null) {
-      await box.add({
-        'group': group,
+      var data = {
+        'fat_group': group,
         'left_panel_position': left_panel_position,
         'id': aux_data['id'],
         'pubkey': aux_data['pubkey'],
@@ -884,10 +1025,11 @@ static String getHiveDbPath() {
         'kind': aux_data['kind'],
         'tags': jsonEncode(aux_data['tags']),
         'content': jsonEncode(aux_data['content']),
-        'sig': aux_data['sig']
-      });
-
-    } else {
+        'sig': aux_data['sig'],
+        'metadata_relays': aux_data['metadata_relays']
+      };
+      await box.add(data);
+    }else {
       throw Exception('You already have this group.');
     }
   }

@@ -197,13 +197,19 @@ class InputBarState extends State<InputBarContainer> {
       inputBarDisplayType = 2;
     }
 
-    if (widget.splitScreenState.roomType =="group") {
+    if (widget.splitScreenState.roomType =="group" ) {
+      inputBarDisplayType = 1;
+    }
+
+
+    if (widget.splitScreenState.roomType =="fat_group") {
       inputBarDisplayType = 1;
     }
 
     if (widget.splitScreenState.roomType =="friend") {
       inputBarDisplayType = 1;
     }
+
     if (widget.splitScreenState.roomType =="home" || widget.splitScreenState.roomType =="home_done" ) {
       inputBarDisplayType = 3;
     }

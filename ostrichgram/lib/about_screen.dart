@@ -64,7 +64,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       SizedBox(height: 16),
                       Text(
-                        '(Version 0.3) \n\n OstrichGram is free, open source software under the MIT license.  Learn more here: ',
+                        '(Version 0.4) \n\n OstrichGram is free, open source software under the MIT license.  Learn more here: ',
                         style: TextStyle(fontSize: 16),
                       ),
                       SizedBox(height: 16),

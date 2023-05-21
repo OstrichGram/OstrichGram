@@ -57,7 +57,7 @@ class _TopContainerState extends State<TopContainer>
   String _roomDescription = "";
   String _roomDescriptionLabel = "";
   bool _isManualReload = false;
-
+ String multiRelaySocketDescription="";
 
 
 
@@ -107,7 +107,7 @@ class _TopContainerState extends State<TopContainer>
 
 
   void closeWebSocketConnection() {
-    _webSocketManagerMulti.closeWebSocketConnection(0);
+    _webSocketManagerMulti.closeAllWebSocketConnections();
   }
 
   Future<void> copyAliasNpubToClipboard() async {
@@ -162,18 +162,53 @@ class _TopContainerState extends State<TopContainer>
           });
         }
 
+        // Right now fat group is the only thing useing multirelay. everything else, just use socket 0.
+        if (widget.splitScreenState.roomType == "fat_group") {
+          _topcontainer_relay = "multi-relay";
+        }
+        else {
           _topcontainer_relay = _webSocketManagerMulti.getUri(0);
+        }
 
         try {
+          if (widget.splitScreenState.roomType == "fat_group") {
+
+            String socketLabel="";
 
 
-          bool socketState = _webSocketManagerMulti.isWebSocketOpen(0);
-          if (socketState) {
-            _isConnected.value = 1;
-          } else {
-            _isConnected.value = 0;
+            String original_relays="";
+            String e_tag = widget.splitScreenState.rightPanelUniqueRowId;
+            Map<String,dynamic> fatGroupMap = await OG_HiveInterface.getData_FatGroupMap(e_tag);
+            if ( fatGroupMap['metadata_relays'] != null) {
+              original_relays = fatGroupMap['metadata_relays'];
+            }
+
+            int original_number_relays = original_relays.split(",").length;
+            List<int> currentSocketIds = await _webSocketManagerMulti.getActiveSockets();
+
+            if (currentSocketIds.length > 0 ) {
+              socketLabel = "Connected: (" + currentSocketIds.length.toString() + "/" + original_number_relays.toString() + ")";
+              _isConnected.value = 4; // let 4 mean to use multirelayscoketdescription connected.
+              multiRelaySocketDescription = socketLabel;
+            } else {
+              // Disconnected.
+              socketLabel = "Offline: (0/"+original_number_relays.toString()+")";
+              _isConnected.value = 5; // let 4 mean to use multirelayscoketdescription DISCONNECTED.
+              multiRelaySocketDescription = socketLabel;
+            }
+
+
+
           }
 
+          else {
+            bool socketState = _webSocketManagerMulti.isWebSocketOpen(0);
+            if (socketState) {
+              _isConnected.value = 1;
+            } else {
+              _isConnected.value = 0;
+            }
+          }
 
 
         } catch (e) {
@@ -185,22 +220,49 @@ class _TopContainerState extends State<TopContainer>
     }
   }
 
+  void clear_cache() async {
+
+    String my_unique_id =  widget.splitScreenState.rightPanelUniqueRowId;
+    String my_room_type = widget.splitScreenState.roomType;
+
+    switch (my_room_type) {
+      case 'relay':
+        await OG_HiveInterface.removeMessagesForRelay(_topcontainer_relay);
+        reload();
+        break;
+      case 'friend':
+        String composite_key = my_unique_id +"_"+ _currentAliasPubkey;
+        await OG_HiveInterface.removeMessagesForFriend(composite_key);
+        reload();
+        break;
+      case 'group':
+        await OG_HiveInterface.removeMessagesForGroup(my_unique_id);
+        await OG_HiveInterface.updateOrInsert_MessagesGroupCacheWatermark(my_unique_id,0);
+        reload();
+        break;
+      case 'fat_group':
+        await OG_HiveInterface.removeMessagesForFatGroup(my_unique_id);
+        await OG_HiveInterface.dumpCacheFatGroupWatermark(my_unique_id);
+        reload();
+    }
+  }
+
   void reload_top() async {
 
 
     WebSocketManagerMulti websocketmanagermulti = WebSocketManagerMulti();
 
-    if (websocketmanagermulti.isWebSocketOpen(0)) {
-      websocketmanagermulti.closeWebSocketConnection(0);
+      websocketmanagermulti.closeAllWebSocketConnections();
       Future.delayed(Duration(milliseconds: 50)).then((_) {
       });
 
-    }
 
     if (widget.splitScreenState.roomType == "relay"){
 
       String requestKind40s = nostr_core.constructJSON_fetch_kind_40s();
-      try { await widget.splitScreenState.freshWebSocketConnectandSend(_topcontainer_relay, requestKind40s);
+
+      String requestKind41s = nostr_core.constructJSON_fetch_kind_41s();
+      try { await widget.splitScreenState.freshWebSocketConnectandSend(_topcontainer_relay, requestKind40s,secondary_message:  requestKind41s);
       }
       catch (e) {
       }
@@ -215,6 +277,32 @@ class _TopContainerState extends State<TopContainer>
       String e_tag = widget.splitScreenState.rightPanelUniqueRowId.split(',')[0];
       String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag,numberItemsToFetch);
       try { await widget.splitScreenState.freshWebSocketConnectandSend(_topcontainer_relay, requestKind42s);
+      }
+      catch (e) {
+      }
+    }
+
+    if (widget.splitScreenState.roomType == "fat_group"){
+
+      websocketmanagermulti.closeAllWebSocketConnections();
+
+      final globalConfig = GlobalConfig();
+      int numberItemsToFetch=globalConfig.message_limit;
+
+      String e_tag = widget.splitScreenState.rightPanelUniqueRowId;
+      String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag,numberItemsToFetch);
+
+      try {
+
+        Map<String,dynamic> fatGroupMap = await OG_HiveInterface.getData_FatGroupMap(e_tag);
+
+        String relays="";
+
+        if ( fatGroupMap['metadata_relays'] != null) {
+          relays = fatGroupMap['metadata_relays'];
+        }
+
+         await widget.splitScreenState.freshWebSocketConnectandSend(relays, requestKind42s,multiSend: true);
       }
       catch (e) {
       }
@@ -278,7 +366,7 @@ class _TopContainerState extends State<TopContainer>
 
     if (alias_name == null || alias_name == "") {
       return DataFromDB(
-          dataList: [" ", relay_name, " "],      //!!!
+          dataList: [" ", relay_name, " "],
           friendAvatar: await createEmptyDrawableRoot());
     }
 
@@ -322,8 +410,14 @@ class _TopContainerState extends State<TopContainer>
       relay_name = relay_name + "...";
     }
 
-    if (relay_name.trim() == "") {
-      relay_name = "Not connected to a relay.";
+    if (widget.splitScreenState.roomType == "fat_group")
+      {
+       relay_name = "multi-relay";
+
+      }  else {
+      if (relay_name.trim() == "") {
+        relay_name = "Not connected to a relay.";
+      }
     }
 
 // Instantiate an empty DrawableRoot object
@@ -374,9 +468,15 @@ if (_isConnected.value ==2 ) {
         roomImageString = "assets/images/orb1-60.png";
       }
       if (roomType == "group") {
-        roomTypeDesc = "Group: ";
+        roomTypeDesc = "group: ";
 
         roomImageString = "assets/images/GROUP3.png";
+      }
+
+      if (roomType == "fat_group") {
+        roomTypeDesc = "Group: ";
+
+        roomImageString = "assets/images/FATGROUP.png";
       }
 
       _roomDescriptionLabel = roomTypeDesc + rightPanelRoomName;
@@ -562,7 +662,7 @@ if (_isConnected.value ==2 ) {
                                             ? 'Status: Connected'
                                             : isConnectedValue == 2
                                             ? 'Status: Processing'
-                                            : 'Unknown Status',
+                                            : multiRelaySocketDescription,
                                         style: TextStyle(
                                           color: isConnectedValue == 0
                                               ? Colors.red
@@ -570,6 +670,10 @@ if (_isConnected.value ==2 ) {
                                               ? Colors.green
                                               : isConnectedValue == 2
                                               ? Colors.blue
+                                              : isConnectedValue == 4
+                                              ? Colors.green
+                                              : isConnectedValue == 5
+                                              ? Colors.red
                                               : Colors.black,
                                           fontWeight: FontWeight.bold,
                                           overflow: TextOverflow.ellipsis,
@@ -604,19 +708,34 @@ if (_isConnected.value ==2 ) {
                           ),
                           // Third Row Widget
                           SizedBox(height: 6),
+
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
+                              GestureDetector(
+                                onTap: () {
+                                  clear_cache();
+                                },
+                                child: Tooltip(
+                                  message: 'Clear Cache',
+                                  child: Icon(
+                                    Icons.delete_sweep,  // Icon for clearing cache
+                                    size: 24,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 12),
                               GestureDetector(
                                 onTap: reload,
                                 child: AnimatedBuilder(
                                   animation: _rotationController,
                                   builder: (context, child) {
                                     return Transform.rotate(
-                                      angle: _rotationController.value *
-                                          2 *
-                                          math.pi,
-                                      child: child,
+                                      angle: _rotationController.value * 2 * math.pi,
+                                      child: Tooltip(
+                                        message: 'Reconnect and resend query',
+                                        child: child,
+                                      ),
                                     );
                                   },
                                   child: Icon(
@@ -628,6 +747,7 @@ if (_isConnected.value ==2 ) {
                               SizedBox(width: 12),
                             ],
                           ),
+
                         ],
                       ),
                     ),

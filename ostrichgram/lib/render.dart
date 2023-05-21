@@ -21,7 +21,10 @@ class render {
         freshWidgets = await ui_helper.getAllChatItemsGroup(
             context, onMainCallback, room_id, formattedData);
         break;
-
+      case "fat_group":
+        freshWidgets = await ui_helper.getAllChatItemsGroup(
+            context, onMainCallback, room_id, formattedData);
+        break;
       case "friend":
         //room_id here is the friends pubkey.
         freshWidgets = await ui_helper.getAllChatItemsFriend(context, onMainCallback, room_id, formattedData);

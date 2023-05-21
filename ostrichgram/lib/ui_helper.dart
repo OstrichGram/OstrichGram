@@ -171,6 +171,157 @@ class ui_helper {
 
 
   // This function builds a chat bubble for a relay room.
+  static Widget buildFatChatBubbleRelay(BuildContext context, onMainCallback,
+      String name, String about, String group_id,
+      {Map<String, dynamic>? aux_data}) {
+
+    String createdAt = aux_data?['created_at']?.toString() ?? '';
+    if (createdAt.isNotEmpty) {
+      final DateTime date = DateTime.fromMillisecondsSinceEpoch(
+          int.parse(createdAt) * 1000);
+      createdAt = DateFormat.yMMMMd().add_jm().format(date);
+    }
+
+    String messageText = 'Name: $name\n\n$about\n\nCreated at: $createdAt';
+
+    void _handleLeftClick_kind40() {
+      onMainCallback('kind40_fat_left_click', group_id, aux_data: aux_data);
+    }
+
+    void _handleRightClick_kind40_MenuOption1() {
+      onMainCallback(
+          'kind40_right_click_add_fat_group', group_id, aux_data: aux_data);
+    }
+
+    void _handleRightClick_kind40_MenuOption2() {
+      onMainCallback(
+          'kind40_right_click_copy_groupID', group_id, aux_data: aux_data);
+    }
+
+    void _showRightClickMenu_kind40(BuildContext context,
+        Offset globalPosition) {
+      final items = <PopupMenuEntry>[
+        PopupMenuItem(
+          value: 1,
+          child: Text('Add Group'),
+        ),
+        PopupMenuItem(
+          value: 2,
+          child: Text('Copy Group ID'),
+        ),
+      ];
+
+      showMenu(
+        context: context,
+        position: RelativeRect.fromLTRB(
+            globalPosition.dx, globalPosition.dy, globalPosition.dx,
+            globalPosition.dy),
+        items: items,
+      ).then((value) {
+        if (value == 1) {
+          _handleRightClick_kind40_MenuOption1();
+        } else if (value == 2) {
+          _handleRightClick_kind40_MenuOption2();
+        }
+      });
+    }
+
+    // MAIN PART OF FUNCTION THAT BUILDS THE RELAY BUBBLE:
+
+    return GestureDetector(
+      onTap: _handleLeftClick_kind40,
+      onSecondaryTapDown: (details) {
+        _showRightClickMenu_kind40(context, details.globalPosition);
+      },
+      child: Container(
+        child: Stack(
+          children: [
+            Align(
+              // ...
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 550),
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(9.0),
+                  border: Border.all(color: Color(0xFF4E2C7F), width: 8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 3,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        style: DefaultTextStyle.of(context).style,
+                        children: <TextSpan>[
+                          TextSpan(
+                            text: name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 24,
+                              color: Color(0xFF9D58FF),
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '\n\n',
+                            style: TextStyle(
+                              fontWeight: FontWeight.normal,
+                              fontSize: 12,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          TextSpan(
+                            text: about,
+                            style: TextStyle(
+                              fontWeight: FontWeight.normal,
+                              fontSize: 12,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '\n\nCreated at: $createdAt',
+                            style: TextStyle(
+                              fontWeight: FontWeight.normal,
+                              fontSize: 12,
+                              color: Colors.black,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Image.asset('assets/images/FATGROUP-35.png', width: 25, height: 25),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    //end gesture detector
+
+  }  // END OF BUILDCHATBUBBLE RELAY.
+
+
+
+  // This function builds a chat bubble for a relay room.
   static Widget buildChatBubbleRelay(BuildContext context, onMainCallback,
       String name, String about, String group_id,
       {Map<String, dynamic>? aux_data}) {
@@ -318,6 +469,8 @@ class ui_helper {
     //end gesture detector
 
   }  // END OF BUILDCHATBUBBLE RELAY.
+
+
 
 
   // This function extracts the "e-tag" value from the auxilliary data for an event.
@@ -847,7 +1000,7 @@ class ui_helper {
   }
 
 
-  // Get all Chat items for a group chat.
+  // Get all Chat items for a group chat.  This is also handling fat groups.
   static Future<List<Widget>> getAllChatItemsGroup(BuildContext context, Function onMainCallback, String group_id, List<Map<String, String>> rawData) async {
 
     // Determine current user
@@ -1040,19 +1193,67 @@ class ui_helper {
   }
 
   // Get all "chat items" for a relay, IOW lists of group chats.
-  static Future<List<Widget>> getAllChatItemsRelay(BuildContext context, Function onMainCallback, String relay, List<Map<String, String>> rawData) async {
-
+  static Future<List<Widget>> getAllChatItemsRelay(
+      BuildContext context, Function onMainCallback, String relay, List<Map<String, String>> rawData) async {
     // Generate widgets
     List<Widget> widgets = [];
+
+    // Separate the messages into kind40 and kind41
+    List<Map<String, String>> kind40Messages = rawData.where((m) => m['kind'] == '40').toList();
+
     for (var message in rawData) {
+      if (message['kind'] == '41') {
+        // Parse the tags
+        List<List<dynamic>> tags = (jsonDecode(message['tags'] ?? '[]') as List).cast<List<dynamic>>();
+
+        // This will hold all the values for 'e' tags
+        List<String> eTagsValues = [];
+
+        Map<String, dynamic> relatedMessage = {};
+
+        for (var tag in tags) {
+          if (tag[0] == 'e') {
+            // Find related message
+            relatedMessage = kind40Messages.firstWhere((m) => m['id'] == tag[1], orElse: () => {});
+
+            if (relatedMessage.isNotEmpty) {
+              relatedMessage['hasMetaData'] = '1';
+
+              // Add value to the list if it exists
+              if (tag.length > 2) {
+                eTagsValues.add(tag[2]);
+              }
+            }
+          }
+        }
+
+        // Update the related message with all 'e' tags values
+        if (relatedMessage.isNotEmpty && eTagsValues.isNotEmpty) {
+          relatedMessage['metadata_relays'] = eTagsValues.join(', ');
+        }
+      }
+    }
+
+
+
+    for (var message in kind40Messages) {
       try {
         Map<String, dynamic> content = jsonDecode(message['content'] ?? '');
         String name = content['name'] ?? '';
         String about = content['about'] ?? '';
         String relayString = relay ?? '';
-        String group_id =  (message['id'] ?? '')  + "," + relayString;
+        String group_id = "";
         message['group_name'] = name;
-        widgets.add(buildChatBubbleRelay(context, onMainCallback, name, about, group_id, aux_data: message)); // Pass the entire message map as aux_data
+
+        if (message['hasMetaData'] == '1' && message['metadata_relays'] != "" ) {
+           group_id = (message['id'] ?? '');
+          widgets.add(buildFatChatBubbleRelay(context, onMainCallback, name, about, group_id, aux_data: message)); // Pass the entire message map as aux_data
+        } else {
+
+           group_id = (message['id'] ?? '') + "," + relayString;
+          widgets.add(buildChatBubbleRelay(context, onMainCallback, name, about, group_id, aux_data: message)); // Pass the entire message map as aux_data
+        }
+
       } catch (e) {
         print('Error processing message: $e');
       }
@@ -1063,7 +1264,7 @@ class ui_helper {
 
 
 // A primary function for fetching all the stuff on the left pane/panel.
-  static List<Widget> getLeftPaneListItems(BuildContext context, Function onMainCallback, List<dynamic> relayListData, List<dynamic> groupListData, List<dynamic> friendsListData, int leftPaneSortStyle) {
+  static List<Widget> getLeftPaneListItems(BuildContext context, Function onMainCallback, List<dynamic> relayListData, List<dynamic> groupListData, List<dynamic> fatGroupListData, List<dynamic> friendsListData, int leftPaneSortStyle) {
 
     String randomString = '';
     Random random = Random();
@@ -1095,6 +1296,7 @@ class ui_helper {
 
       combinedList.addAll(relayListData.map((item) => {...item, "type": "relay", "left_panel_position": num.parse(item["left_panel_position"].toString())}));
       combinedList.addAll(groupListData.map((item) => {...item, "type": "group", "left_panel_position": num.parse(item["left_panel_position"].toString())}));
+      combinedList.addAll(fatGroupListData.map((item) => {...item, "type": "fat_group", "left_panel_position": num.parse(item["left_panel_position"].toString())}));
       combinedList.addAll(friendsListData.map((item) => {...item, "type": "friend", "left_panel_position": num.parse(item["left_panel_position"].toString())}));
 
       // Sort the combined list based on the left_panel_position key
@@ -1120,6 +1322,18 @@ class ui_helper {
 
           leftPaneWidgets.add(buildListItemGroup(
               context, onMainCallback, name, about, image_seed, uniqueId));
+        } else if (item["type"] == "fat_group") {
+          String uniqueId = item["fat_group"];
+          String itemContent = item["content"];
+
+          dynamic decodedDynamic = jsonDecode(itemContent);
+          String jsonString = decodedDynamic.toString();
+          Map<String, dynamic> decodedJson = jsonDecode(jsonString);
+          String name = decodedJson["name"] ?? '';
+          String about = decodedJson["about"] ?? '';
+
+          leftPaneWidgets.add(buildListItemFatGroup(
+              context, onMainCallback, name, about, image_seed, uniqueId));
         } else if (item["type"] == "friend") {
           String uniqueId = item["pubkey"].toString();
           leftPaneWidgets.add(buildListItemFriend(
@@ -1141,6 +1355,8 @@ class ui_helper {
       // Sort alphabetically by category
       relayListData.sort((a, b) => a["relay"].compareTo(b["relay"]));
       groupListData.sort((a, b) => a["group"].compareTo(b["group"]));
+
+      fatGroupListData.sort((a, b) => a["fat_group"].compareTo(b["fat_group"]));
       friendsListData.sort((a, b) => a["friend"].compareTo(b["friend"]));
 
       // Add items to the leftPaneWidgets in the required order
@@ -1149,6 +1365,22 @@ class ui_helper {
         leftPaneWidgets.add(buildListItemRelay(
             context, onMainCallback, item["relay"], image_seed, uniqueId));
       }
+
+      for (var item in fatGroupListData) {
+        String uniqueId = item["fat_group"];
+        String itemContent = item["content"];
+
+        dynamic decodedDynamic = jsonDecode(itemContent);
+        String jsonString = decodedDynamic.toString();
+        Map<String, dynamic> decodedJson = jsonDecode(jsonString);
+
+        String name = decodedJson["name"] ?? '';
+        String about = decodedJson["about"] ?? '';
+
+        leftPaneWidgets.add(buildListItemFatGroup(
+            context, onMainCallback, name, about, image_seed, uniqueId));
+      }
+
 
       for (var item in groupListData) {
         String uniqueId = item["group"];
@@ -1208,6 +1440,60 @@ class ui_helper {
         onOption3();
       }
     });
+  }
+
+
+  // Show the right click menu for a group
+  static Future<void> showContextMenuFatGroup(BuildContext context, Offset position, VoidCallback onOption1, VoidCallback onOption2, VoidCallback onOption3) async {
+    final ThemeData customTheme = ThemeData(
+      textTheme: TextTheme(
+        subtitle1: TextStyle(color: Colors.black, fontSize: 16),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(5),
+        ),
+        color: Colors.white,
+        enableFeedback: true,
+        textStyle: TextStyle(color: Colors.black, fontSize: 16),
+      ),
+    );
+
+    final RenderBox overlay = Overlay.of(context)!.context.findRenderObject() as RenderBox;
+    final RelativeRect positionInOverlay = RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      overlay.size.width - position.dx,
+      overlay.size.height - position.dy,
+    );
+
+    final value = await showMenu<int>(
+      context: context,
+      position: positionInOverlay,
+      items: [
+        PopupMenuItem(
+          value: 1,
+          child: Text('Remove Group'),
+        ),
+        PopupMenuItem(
+          value: 2,
+          child: Text('Copy Group ID'),
+        ),
+        PopupMenuItem(
+          value: 3,
+          child: Text('View Relays'),
+        ),
+      ],
+    );
+
+    if (value == 1) {
+      onOption1();
+    } else if (value == 2) {
+      onOption2();
+    } else if (value ==3) {
+      onOption3();
+    }
   }
 
   // Show the right click menu for a group
@@ -1466,7 +1752,93 @@ class ui_helper {
     );
   }
 
+// build left panel row for a fat group
+  static Widget buildListItemFatGroup(BuildContext context, Function onMainCallback, String name, String message, Uint8List seed, String unique_group_id) {
+    Map<String, dynamic> auxData = {
+      'group_name': name,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(left: 15, right: 15, top: 15, bottom: 15),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: Colors.black87, width: 1.0)),
+        ),
+        child: GestureDetector(
+          onSecondaryTapDown: (details) {
+            showContextMenuFatGroup(
+              context,
+              details.globalPosition,
+                  () => onMainCallback('right_click_remove_fat_group', unique_group_id),
+                  () => onMainCallback('right_click_copy_fat_group_id', unique_group_id),
+                  () => onMainCallback('right_click_fat_group_view_relays', unique_group_id),
+            );
+          },
+          child: Stack(
+            children: [
+              InkWell(
+                onTap: () async {
+                  await onMainCallback('left_click_left_panel_fat_group', unique_group_id, aux_data: auxData);
 
+                },
+
+
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      child: Image.asset(
+                        'assets/images/FATGROUP.png',
+                        fit: BoxFit.fill,
+                        width: 60,
+                        height: 60,
+                      ),
+                    ),
+                    SizedBox(width: 15),
+                    Expanded(
+                      child: Container(
+                        height: 60, // Set the height equal to the row height
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Flexible(
+                              child: Text(
+                                message,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: CustomPaint(
+                  size: Size(20, 20),
+                  painter: TrianglePainterBlack(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
 // build left panel row for a group
   static Widget buildListItemGroup(BuildContext context, Function onMainCallback, String name, String message, Uint8List seed, String unique_group_id) {
@@ -1576,6 +1948,28 @@ class TrianglePainterPurple extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+// Paint the triangle decoration for the left panel row
+class TrianglePainterBlack extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black87
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..quadraticBezierTo(size.width / 2, size.height * 1.1, size.width, 0)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 
 
 // Paint the left panel decoration

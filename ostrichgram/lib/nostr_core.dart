@@ -191,6 +191,60 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
   }  // END create kind 42 post.
 
 
+
+  static Future<String> create_kind41_post(String eTag, String relays) async {
+
+    // Get Chosen Alias pubkey and privkey
+    Map<String, String> chosenAliasData = await OG_HiveInterface.getData_Chosen_Alias_Map();
+    String alias = chosenAliasData?['alias'] ?? '';
+
+    String pubkey ="";
+    String privkey ="";
+    pubkey = await OG_HiveInterface.getData_PubkeyFromAlias(alias);
+    privkey = await OG_HiveInterface.getData_PrivkeyFromAlias(alias);
+
+    // Define the created_at
+    int currentTimeStamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    int created_at = currentTimeStamp;
+
+
+    // Build the tags
+    List<String> relayList = relays.split(',');
+    List<List<String>> tags = [];
+
+    for (String relay in relayList) {
+      tags.add(["e", eTag, relay]);
+    }
+
+    int kind = 41;
+
+    Map<String, String> content = {
+    };
+
+    String message = jsonEncode(content) ;
+
+    // Generate the event id
+    List<dynamic> serializedEvent = generateSerializedEvent(pubkey, created_at, kind, tags, message);
+    String serializedEventJson = jsonEncode(serializedEvent);
+
+    // Calculate the SHA256 hash of the serialized event
+    Digest hash_object_id = sha256.convert(utf8.encode(serializedEventJson));
+    String event_id = hash_object_id.toString();
+
+
+    // Generate the sig
+    Uint8List sig;
+    Uint8List aux_rand = generateAuxRand();
+    Uint8List event_id_bytes = Uint8List.fromList(hex.decode(event_id));
+    Uint8List privkey_bytes = Uint8List.fromList(hex.decode(privkey));
+    sig = bip340.schnorr_sign(event_id_bytes, privkey_bytes, aux_rand);
+    String sig_string = hex.encode(sig);
+
+    // Create the event as JSON and return it.
+    String JSONpost = createJSONpost(event_id, pubkey, created_at, kind, tags, message, sig_string);
+    return JSONpost;
+  }  // END create kind 40 post.
+
   static Future<String> create_kind40_post(String name, String about) async {
 
     // Get Chosen Alias pubkey and privkey
@@ -309,6 +363,23 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
     return request;
   }
 
+  static String constructJSON_fetch_kind_41s() {
+    final globalConfig = GlobalConfig();
+    int limit = globalConfig.message_limit;
+    String subscription_id = generateRandomSubscriptionString();
+
+    List<dynamic> requestData = [
+      'REQ',
+      subscription_id,
+      {
+        'kinds': [41],
+        'limit': limit,
+      },
+    ];
+
+    String request = jsonEncode(requestData);
+    return request;
+  }
 
   static String constructJSON_fetch_kind_42s(String e_tag,int limit) {
     final globalConfig = GlobalConfig();
@@ -350,16 +421,18 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
     return request;
   }
 
-
   static Future<List<Map<String, String>>> processWebSocketData(Map<String, dynamic> args) async {
     List<String> fetchedData = [];
     if (args["fetchedData"] != null ) {
       fetchedData = args["fetchedData"]!;
     }
-    String hiveDbPath = "";
-    if (args["hiveDbPath"] != null ) {
-      hiveDbPath = args["hiveDbPath"]!;
+
+    Map<String,dynamic> configSettings= {};
+    if (args["configSettings"] != null ) {
+      configSettings = args["configSettings"]!;
     }
+
+
 
     List<Map<String, String>> processedData = [];
 
@@ -367,7 +440,6 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
     String subscriptionID ="";
 
     for (String string in fetchedData) {
-   // fetchedData.forEach((string) {
       List<dynamic> data = jsonDecode(string);
       if (data.length > 2 && data[2] is Map<String, dynamic>) {
         Map<String, dynamic> eventData = data[2];
@@ -399,7 +471,7 @@ static Future<String> decipher_kind04_message(String friend_pubkey, String ciphe
 
 
             // Get the config settings
-            Map<String, dynamic> configSettings = await OG_HiveInterface.getData_ConfigSettings(myHiveDbPath: hiveDbPath);
+            //Map<String, dynamic> configSettings = await OG_HiveInterface.getData_ConfigSettings(myHiveDbPath: hiveDbPath);
             // Check if signature verification is enabled in the settings
             bool verifySignatures = configSettings['verify_signatures'] ?? true;
             // If signature verification is enabled, call the schnorr_verify function, otherwise set isSignatureValid to true

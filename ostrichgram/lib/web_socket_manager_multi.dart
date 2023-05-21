@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+
 
 /*
 
@@ -68,7 +70,7 @@ class WebSocketManagerMulti {
 
   WebSocketManagerMulti._internal() {
     _buffers[0] = [];
-    _statuses[0] = WebSocket.closed;
+    _statuses[0] = 0;
     _uris[0] = '';
     _inactivityTimers[0] = null;
     _shouldCloseMap[0] = false;
@@ -76,7 +78,90 @@ class WebSocketManagerMulti {
   }
 
 
+  Future<List<int>> getActiveSockets() async {
+    List<int> activeSockets = [];
+    _statuses.forEach((socketId, status) {
+      if (status == 1) {
+        activeSockets.add(socketId);
+      }
+    });
+    return activeSockets;
+  }
+
+
+  Future<void> createFatGroup(String kind40_msg, String kind41_msg, String relays) async {
+    // First, terminate all connections.
+    closeAllWebSocketConnections();
+
+    // Put items into list
+    List<String> relay_list = relays.split(",");
+    int number_relays = relay_list.length;
+
+    // Trim the relays from whitespace.
+    for (int i = 0; i < number_relays; i++) {
+      relay_list[i]=relay_list[i].trim();
+    }
+
+    // Create a list to store socket IDs
+    List<int> socketIds = [];
+
+    // Initialize a random number generator
+    Random random = Random();
+
+    // Prepare a list of Futures for kind40 messages
+    List<Future<void>> kind40Futures = [];
+
+    // Prepare a list of Futures for kind41 messages
+    List<Future<void>> kind41Futures = [];
+
+    for (int i = 0; i < number_relays; i++) {
+      int socketId;
+
+      // Generate a unique socket ID and check if it exists
+      do {
+        socketId = random.nextInt(10000) + 1;
+      } while (socketIds.contains(socketId));
+
+      // Add the unique socket ID to the list
+      socketIds.add(socketId);
+
+      // Prepare to open a new WebSocket connection with the relay and send kind40 message
+      kind40Futures.add(singleServeSocketMessage(socketId, relay_list[i], kind40_msg));
+
+      // Prepare to open a new WebSocket connection with the relay and send kind41 message
+      kind41Futures.add(singleServeSocketMessage(socketId, relay_list[i], kind41_msg));
+    }
+
+    try {
+      // Send all kind40 messages concurrently and wait for them to complete
+      await Future.wait(kind40Futures, eagerError: false);
+
+      // Wait for 50ms
+      await Future.delayed(Duration(milliseconds: 50));
+
+      // Send all kind41 messages concurrently and wait for them to complete
+      await Future.wait(kind41Futures, eagerError: false);
+    } catch (e) {
+      // Handle any exceptions that occurred while sending the messages. Note this will only catch the first exception (e) from any of the websocket calls.
+      print(e);
+    }
+
+    return;
+  }
+
+
+
   Future<void> send(int socketId, String message, {bool storeRequest=false}) async {
+
+// Check if the WebSocket associated with the provided socketId exists.
+    if (_webSockets[socketId] == null) {
+      throw 'WebSocket for socketId $socketId does not exist.';
+    }
+
+    // Check the readyState of the WebSocket.
+    if (_webSockets[socketId]!.readyState != WebSocket.open) {
+      throw 'WebSocket for socketId $socketId is not open.';
+    }
     if (_webSockets[socketId] != null &&
         _webSockets[socketId]!.readyState == WebSocket.open) {
       _webSockets[socketId]!.add(message);
@@ -84,11 +169,8 @@ class WebSocketManagerMulti {
          _requests[socketId]  = message;
       }
 
-    } else {
-      print(
-          'The WebSocketManager is trying to send a message, but the connection is not open.');
-      throw 'The WebSocketManager is trying to send a message, but the connection is not open.';
     }
+
   }
 
   void _resetInactivityTimer(int socketId) {
@@ -99,7 +181,11 @@ class WebSocketManagerMulti {
     });
   }
 
+
+
+
   Future<int> openPersistentWebSocket(int socketId, String url) async {
+
     if (_statuses.containsKey(socketId) && _statuses[socketId] != 0) {
       return 1;
     }
@@ -167,6 +253,43 @@ class WebSocketManagerMulti {
     return 0;
   }
 
+  Future<void> singleServeSocketMessage(int socketId, String url, String message) async {
+
+    // open a socket, send a message, close it.  used for fatgroup creation where we want to send a bunch of 40 and 41 to various re
+    try {
+      // Open WebSocket connection with a timeout
+      WebSocket webSocket = await WebSocket.connect(url).timeout(Duration(seconds: 10));
+
+      // Save the webSocket in the _webSockets map using the socketId
+      _webSockets[socketId] = webSocket;
+
+      // Once the connection is opened, listen for incoming data
+      _webSockets[socketId]!.listen(
+            (data) {
+          // You can handle any incoming data here if needed
+        },
+        onDone: () {
+          print('WebSocket connection closed for socketId: $socketId');
+        },
+        onError: (error) {
+          print('Error for socketId $socketId: $error');
+        },
+      );
+
+      // Send the message
+      _webSockets[socketId]!.add(message);
+
+      // Close the WebSocket connection
+      await _webSockets[socketId]!.close();
+
+      // Remove the WebSocket from the _webSockets map
+      _webSockets.remove(socketId);
+    } catch (e) {
+      print('Error connecting to WebSocket for socketId $socketId: $e');
+    }
+  }
+
+
 
   Future<WebSocket> _connectWithTimeout(int socketId, String url,
       Duration timeout) async {
@@ -193,6 +316,40 @@ class WebSocketManagerMulti {
     return completer.future;
   }
 
+  int getCleanSocketId() {
+    const int maxSocketId = 10000;
+    const int minSocketId = 1;
+    const int closedStatus = 0;
+
+    // Initialize a random number generator
+    Random random = Random();
+
+    int socketId;
+
+    // Generate a unique socket ID and check if it exists and is closed
+    do {
+      socketId = random.nextInt(maxSocketId) + minSocketId;
+    } while (_statuses.containsKey(socketId) && _statuses[socketId] != closedStatus);
+
+    // Initialize the socket properties
+    _webSockets[socketId] = null;
+    _buffers[socketId] = [];
+    _statuses[socketId] = 0;
+    _uris[socketId] = '';
+    _inactivityTimers[socketId] = null;
+    _shouldCloseMap[socketId] = false;
+    _bufferSizes[socketId] = 0;
+    _requests[socketId] = '';
+
+    return socketId;
+  }
+
+
+  void closeAllWebSocketConnections() {
+    for (int socketId in _webSockets.keys) {
+      closeWebSocketConnection(socketId);
+    }
+  }
 
   void closeWebSocketConnection(int socketId) {
     _webSockets[socketId]?.close();
@@ -205,6 +362,43 @@ class WebSocketManagerMulti {
     return _webSockets[socketId] != null &&
         _webSockets[socketId]?.readyState == WebSocket.open;
   }
+
+
+  List<String> collectWebSocketBufferAll() {
+// Collects but also puts the "relay" and socket id in.
+
+    List<String> fetchedData = [];
+    List<String> buffer_items = [];
+
+    _statuses.forEach((socketId, status) {
+      if (status == 1 && _buffers.containsKey(socketId) && _buffers[socketId] != null) {
+        buffer_items = _buffers[socketId]!;
+
+        for (var item in buffer_items) {
+          // Parse string into json
+          var itemJson = jsonDecode(item);
+
+          // Check if the json item is a list
+          if (itemJson is List<dynamic>) {
+            // Add "relay" field to the main dictionary of the event
+            if (itemJson.length >= 3 && itemJson[2] is Map<String, dynamic>) {
+              itemJson[2]['relay'] = _uris[socketId];
+              itemJson[2]['socket'] = socketId;
+            }
+          }
+
+          // Encode the json back into a string and add it to fetchedData
+          fetchedData.add(jsonEncode(itemJson));
+        }
+
+        _buffers[socketId]!.clear();
+      }
+    });
+
+    return fetchedData;
+  }
+
+
 
   List<String> collectWebSocketBuffer(int socketId) {
 

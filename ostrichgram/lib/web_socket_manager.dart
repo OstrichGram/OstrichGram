@@ -55,6 +55,7 @@ class WebSocketManager {
   }
 
 
+
   Future<int> openPersistentWebSocket(String url) async {
     if (_status != 0) {
       return 1;

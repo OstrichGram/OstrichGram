@@ -8,6 +8,24 @@ import 'dart:math';
 // Various utility and helper functions.
 class OG_util {
 
+  static String getIdFromEvent(String event) {
+
+    String id = "";
+    if (event == null || event == "") {
+      return "";
+    }
+
+    try {
+      List<dynamic> eventDecoded = jsonDecode(event);
+      Map<String, dynamic> eventJSON_Map = eventDecoded[1];
+      id = eventJSON_Map['id'];
+    } catch (e) {
+      print(e);
+    }
+    return id;
+  }
+
+
   static String getEtagValueFromRequest(String request) {
     // Decode the JSON string
     if (request == null || request == "") {
@@ -123,7 +141,7 @@ class OG_util {
     }
   }
 
-  
+
   static List<String> getAllEmojis() {
     List<String> allEmojis = Emoji.smileys + Emoji.symbols + Emoji.foodDrink + Emoji.animalsNature + Emoji.travelPlaces + Emoji.objects + Emoji.activityAndSports + Emoji.clothingAndAccessories + Emoji.flags + Emoji.gesturesAndBodyParts + Emoji.peopleAndFantasy;
     return allEmojis;

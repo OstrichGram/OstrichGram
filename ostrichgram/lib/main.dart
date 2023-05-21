@@ -31,7 +31,6 @@ and relays.  It runs a loop on a 3 second counter in _fetchDataFromWebSocketBuff
 combined with the database cache.  The main.dart also handles a number of callback events for other things
 that happen in other parts of the application.  main.dart also calls to other classes like top container,
 right panel, and input bar to create other parts of the app.
-
  */
 
 void main() async {
@@ -80,7 +79,7 @@ class SplitScreenState extends State<SplitScreen> {
   final ScrollController _scrollController = ScrollController();
   final WebSocketManagerMulti websocketmanagermulti = WebSocketManagerMulti();
   String _mainWebSocketURI = "";
-  String _roomType = ""; // Values: "relay" "group" "friend"
+  String _roomType = ""; // Values: "relay" "group" "friend" "fat_group"
   String _rightPanelRoomName = "";
 
   String get roomType => _roomType;
@@ -114,10 +113,15 @@ class SplitScreenState extends State<SplitScreen> {
   // For the animation on top if checking signatures takes a while etc
   ValueNotifier<bool> processingWebSocketInfo = ValueNotifier(false);
 
-  // Keep track of the subscription IDs so we can double check the buffer against the request.  This can prevent the wrong messages from showing up in the wrong room if the user clicks around too fast while the buffer is trying to update.
-  // We need two of these because the direct messages have 2 queries.
-  String currentSubscriptionID1="";
-  String currentSubscriptionID2="";
+  /* Keep track of the subscription IDs so we can double check the buffer against the request.  This can prevent the wrong messages from showing up in the wrong room if the user clicks around too fast while the buffer is trying to update.
+  We need two of these for DMs (one for user messages, one for friend's messages.  We also need multiple for multi relay chat (fatgroup), so use a list of strings.
+   */
+
+  List<String> currentSubscriptionIDs = [];
+
+  Map<String,dynamic> _configSettings = {};
+
+
 
   // This loop should run every 3 seconds to update the right panel based on listening to the websocket.
   Future<void> _fetchDataFromWebSocketBuffer() async {
@@ -126,6 +130,7 @@ class SplitScreenState extends State<SplitScreen> {
     // aren't sure how it might impact the existing room, or has known bad potential outcomes.
     // So, to be safe, just reset the room.  "home_done" is a variation on home just so we
     // don't keep repainting.
+
 
     if (_roomType == "home") {
       _RightPanelNotifier.value = [];
@@ -137,77 +142,126 @@ class SplitScreenState extends State<SplitScreen> {
       return;
     }
 
-    // Get anything new from the websocket buffer.
-    List<String> fetchedData = websocketmanagermulti.collectWebSocketBuffer(0);
-    int mostRecentTimeBeforeEOSE = OG_util.getMostRecentTimeBeforeEOSE(fetchedData);
+    List<String> fetchedData = [];
+    List<Map<String, String>> formattedData = [];
 
-    // Grab the original request message so we can get the group_id.
-    String currentRequest=websocketmanagermulti.getCurrentRequest(0);
-    String eTag = OG_util.getEtagValueFromRequest(currentRequest);
-    if (eTag!="") {
+    if (_roomType == "fat_group") {
+      fetchedData = websocketmanagermulti.collectWebSocketBufferAll();
 
-      // if mostRecentTimeBeforeEOSE is 0, that means there were no events returned.  We only want to update the DB if its non-zero, otherwise we'll overwrite the watermark.
+      List<Map<String, dynamic>> latestMessageFromEachRelay = [];
 
-      mostRecentTimeBeforeEOSE--;
-      if (mostRecentTimeBeforeEOSE>0) {
-        try {
-          await OG_HiveInterface.updateOrInsert_MessagesGroupCacheWatermark(
-              eTag, mostRecentTimeBeforeEOSE);
-        } catch (e) {}
+      for (String dataString in fetchedData) {
+        List<dynamic> singleData = jsonDecode(dataString);
+        if (singleData.length >= 3 && singleData[2] is Map) {
+          String relay = singleData[2]['relay'];
+          String createdAt = singleData[2]['created_at'].toString();
+          int socketId = singleData[2]['socket']; // Get the socket ID
+
+          Map<String, dynamic> existingRelay = latestMessageFromEachRelay.firstWhere((item) => item['relay'] == relay, orElse: () => {});
+
+          if (existingRelay.isEmpty) {
+            latestMessageFromEachRelay.add({'relay': relay, 'createdAt': createdAt, 'socketId': socketId});
+          } else if (int.parse(existingRelay['createdAt']) < int.parse(createdAt)) {
+            existingRelay['createdAt'] = createdAt;
+            existingRelay['socketId'] = socketId;
+          }
+        }
       }
 
-    } // endif eTag != null
+
+      for (Map<String, dynamic> relayData in latestMessageFromEachRelay) {
+        String relay = relayData['relay'];
+        int createdAt = int.parse(relayData['createdAt']);
+        int socketId = relayData['socketId'];
+
+        String currentRequest="";
+        try {
+          currentRequest = websocketmanagermulti.getCurrentRequest(socketId);
+        } catch (e) {
+        }
+
+        if (currentRequest != "") {
+          String eTag = OG_util.getEtagValueFromRequest(currentRequest);
+          if (eTag != "") {
+            // Insert/Update the watermark for this composite key (group_relay) for the fatgroup.
+              String compositeKey = eTag + "_" + relay;
+              await OG_HiveInterface.updateOrInsert_MessagesFatGroupCacheWatermark(compositeKey, createdAt);
 
 
-    List<dynamic> singleEvent=[];
-    String my_event = "";
-    String my_event_id ="";
-
-    for (int i = fetchedData.length - 1; i >= 0; i--) {
-      my_event = fetchedData[i];
-        singleEvent = jsonDecode(my_event);
-
-        //Grab the "EVENT" part of the event to get the subscription id.
-        for (int i = 0; i < singleEvent.length - 1; i++) {
-          if (singleEvent[i] == "EVENT") {
-            my_event_id= singleEvent[i + 1];
-            break;
           }
         }
 
-        if (my_event_id != currentSubscriptionID1 && my_event_id != currentSubscriptionID2) {
-          // If the event subscription is not one of our current subscriptions id, remove it.  This also handles EOSE.
+      }
+    }
+
+    else {
+      //  NORMAL NON- FAT GROUP CASE.
+      // Get anything new from the websocket buffer.
+       fetchedData = websocketmanagermulti.collectWebSocketBuffer(0);
+       int mostRecentTimeBeforeEOSE = OG_util.getMostRecentTimeBeforeEOSE(fetchedData);
+       // Grab the original request message so we can get the group_id.
+       String currentRequest=websocketmanagermulti.getCurrentRequest(0);
+       String eTag = OG_util.getEtagValueFromRequest(currentRequest);
+       if (eTag!="") {
+
+         // if mostRecentTimeBeforeEOSE is 0, that means there were no events returned.  We only want to update the DB if its non-zero, otherwise we'll overwrite the watermark.
+
+         mostRecentTimeBeforeEOSE--;
+         if (mostRecentTimeBeforeEOSE>0) {
+           try {
+             await OG_HiveInterface.updateOrInsert_MessagesGroupCacheWatermark(
+                 eTag, mostRecentTimeBeforeEOSE);
+           } catch (e) {}
+         }
+       } // endif eTag != null
+
+
+       List<dynamic> singleEvent=[];
+       String my_event = "";
+       String my_event_id ="";
+
+       for (int i = fetchedData.length - 1; i >= 0; i--) {
+         my_event = fetchedData[i];
+         singleEvent = jsonDecode(my_event);
+
+         //Grab the "EVENT" part of the event to get the subscription id.
+         for (int i = 0; i < singleEvent.length - 1; i++) {
+           if (singleEvent[i] == "EVENT") {
+             my_event_id= singleEvent[i + 1];
+             break;
+           }
+         }
+
+
+         if (!currentSubscriptionIDs.contains(my_event_id)) {
+           // If the event subscription is not one of our current subscriptions id, remove it.  This also handles EOSE messages returned from the relay, which we can ignore.
            fetchedData.removeAt(i);
-        }
+         }
 
-    } // End For loop
+       } // End For loop
 
-    List<Map<String, String>> formattedData = [];
+
+    }
+
 
     if (fetchedData.isNotEmpty) {
-
-
       processingWebSocketInfo.value = true;
-      String hiveDbPath = OG_HiveInterface.getHiveDbPath();
 
       formattedData = await compute(
         nostr_core.processWebSocketData,
-        {"fetchedData": fetchedData, "hiveDbPath": hiveDbPath},
+        {"fetchedData": fetchedData,  "configSettings": _configSettings},
       );
 
       formattedData = formattedData.where((singleItemMap) {
         String mySubscription = singleItemMap['subscription'] ?? "";
-        return mySubscription == currentSubscriptionID1 ||
-            mySubscription == currentSubscriptionID2;
+        return currentSubscriptionIDs.contains(mySubscription);
       }).toList();
-
       processingWebSocketInfo.value = false;
     }
     else {
 
       processingWebSocketInfo.value = false;
     }
-
 
     // Start creating a composite DB key
     String my_db_key = _rightPanelUniqueRowId + "_";
@@ -217,8 +271,7 @@ class SplitScreenState extends State<SplitScreen> {
       Map<String, String> chosenAliasData =
           await OG_HiveInterface.getData_Chosen_Alias_Map();
       String my_alias = chosenAliasData?['alias'] ?? '';
-      String my_user_pubkey =
-          await OG_HiveInterface.getData_PubkeyFromAlias(my_alias);
+      String my_user_pubkey = await OG_HiveInterface.getData_PubkeyFromAlias(my_alias);
       //This will have a single underscore.  When passing to the DB classes, the extra underscore will be put in between the composite key and the row data.
       my_db_key = my_db_key + my_user_pubkey;
     }
@@ -261,6 +314,8 @@ class SplitScreenState extends State<SplitScreen> {
     switch (roomType) {
       case "group":
         return await OG_HiveInterface.getMessagesForGroup(my_db_key);
+      case "fat_group":
+        return await OG_HiveInterface.getMessagesForFatGroup(my_db_key);
       case "friend":
         return await OG_HiveInterface.getMessagesForFriend(my_db_key);
       case "relay":
@@ -299,6 +354,10 @@ class SplitScreenState extends State<SplitScreen> {
         await OG_HiveInterface.addData_MessagesGroup(my_db_key, mergedData,
             WipePreviousCacheforComposite: true);
         break;
+      case "fat_group":
+        await OG_HiveInterface.addData_MessagesFatGroup(my_db_key, mergedData,
+            WipePreviousCacheforComposite: true);
+        break;
       case "friend":
         await OG_HiveInterface.addData_MessagesFriend(my_db_key, mergedData,
             WipePreviousCacheforComposite: true);
@@ -314,28 +373,13 @@ class SplitScreenState extends State<SplitScreen> {
 
   // This is a primary function for establishing a websocket connection and sending
   // the main query.
-
-  Future<void> freshWebSocketConnectandSend(String websocketURI, String message,
-      {String? secondary_message, bool storeRequest = false}) async {
-
-   // If this is a kind 42 message, get the cache watermark so we can include it in the query.
-    if (OG_util.isKind42Request(message)) {
-      int watermark_since = 0;
-      String eTag=OG_util.getEtagValueFromRequest(message);
-      try {
-        Map<String,dynamic> groupCacheMap = await OG_HiveInterface.getData_GroupCacheWatermark(eTag);
-        watermark_since = groupCacheMap['since'];
-      } catch (e) {
-      }
-      // include it in the query.
-      message = OG_util.addTimeStampFiltersToQuery(message, since:watermark_since);
-    }
-
+  Future<void> freshWebSocketConnectandSend(String websocketURIs, String message,
+      {String? secondary_message, bool storeRequest = false, bool multiSend = false}) async {
     // Get the subscription IDs
-   List<dynamic> messageList = jsonDecode(message);
+    List<dynamic> messageList = jsonDecode(message);
     for (int i = 0; i < messageList.length - 1; i++) {
       if (messageList[i] == "REQ") {
-        currentSubscriptionID1= messageList[i + 1];
+        currentSubscriptionIDs.add(messageList[i + 1]);
         break;
       }
     }
@@ -344,42 +388,101 @@ class SplitScreenState extends State<SplitScreen> {
       List<dynamic> messageList2 = jsonDecode(secondary_message);
       for (int i = 0; i < messageList2.length - 1; i++) {
         if (messageList2[i] == "REQ") {
-          currentSubscriptionID2 = messageList2[i + 1];
+          currentSubscriptionIDs.add(messageList2[i + 1]);
           break;
         }
       }
     }
-    else {
-      // empty this out otherwise if the previous query was a DM room, the secondary ID can get into the message cache incorrectly.
-      currentSubscriptionID2="";
+
+    if (!multiSend) {
+      String websocketURI = websocketURIs;
+      await _initWebSocketConnection(websocketURI);
+
+      if (OG_util.isKind42Request(message)) {
+        int watermark_since = 0;
+        String eTag = OG_util.getEtagValueFromRequest(message);
+        try {
+          Map<String, dynamic> groupCacheMap = await OG_HiveInterface
+              .getData_GroupCacheWatermark(eTag);
+          watermark_since = groupCacheMap['createdAt'] == null
+              ? 0
+              : int.parse(groupCacheMap['createdAt']);
+        } catch (e) {
+          print(e);
+        }
+        // Include watermark in the query
+        message =
+            OG_util.addTimeStampFiltersToQuery(message, since: watermark_since);
+      }
+
+      bool websocketStatus = websocketmanagermulti.isWebSocketOpen(0);
+
+      if (websocketStatus) {
+        await websocketmanagermulti.send(
+            0, message, storeRequest: storeRequest);
+        if (secondary_message != null) {
+          Future.delayed(Duration(milliseconds: 100), () {});
+          await websocketmanagermulti.send(0, secondary_message);
+        }
+      } else {
+        print('WebSocket is not open, cannot send message');
+        return;
+      }
     }
 
+    if (multiSend) {
+      List<String> websocketURIList = websocketURIs.split(',');
+      List<Future<void>> primaryMessageFutures = [];
+      List<Future<void>> secondaryMessageFutures = [];
 
-    await _initWebSocketConnection(websocketURI);
+      for (String websocketURI in websocketURIList) {
+        websocketURI = websocketURI.trim();
+        int socketId = websocketmanagermulti.getCleanSocketId();
+        await _initWebSocketConnection(websocketURI, socketId: socketId);
 
-    bool websocketStatus = websocketmanagermulti.isWebSocketOpen(0);
+        String relay = websocketURI;
+        String eTag = OG_util.getEtagValueFromRequest(message);
+        String compositeKey = eTag + "_" + relay;
+        Map<String, dynamic> groupCacheMap = await OG_HiveInterface
+            .getData_FatGroupCacheWatermark(compositeKey);
 
-    if (websocketStatus) {
-      await websocketmanagermulti.send(0,message,storeRequest: storeRequest);
+        if (OG_util.isKind42Request(message)) {
+          int watermark_since = groupCacheMap['createdAt'] == null
+              ? 0
+              : int.parse(groupCacheMap['createdAt']);
+          message = OG_util.addTimeStampFiltersToQuery(
+              message, since: watermark_since);
+        }
 
-      if (secondary_message != null) {
-        Future.delayed(Duration(milliseconds: 100), () {
-          // WAIT 100 MS just so we don't try to send too much too fast.
-          ;
-        });
-        await websocketmanagermulti.send(0,secondary_message);
+        if (websocketmanagermulti.getStatus(socketId) == 1) {
+          primaryMessageFutures.add(websocketmanagermulti.send(
+              socketId, message, storeRequest: storeRequest));
+
+          if (secondary_message != null) {
+            secondaryMessageFutures.add(
+                websocketmanagermulti.send(socketId, secondary_message));
+          }
+        } else {
+          print('WebSocket is not open, cannot send message');
+          return;
+        }
+// Wait for all primary messages to be sent
+        await Future.wait(primaryMessageFutures);
+
+// Pause for 100ms
+        await Future.delayed(Duration(milliseconds: 100));
+
+// Wait for all secondary messages to be sent
+        await Future.wait(secondaryMessageFutures);
       }
-    } else {
-      print('WebSocket is not open, cannot send message');
-      return;
     }
   }
 
-  // A simple wrapper function before opening the websocket.
-  Future<void> _initWebSocketConnection(String websocketURI) async {
+      // A simple wrapper function before opening the websocket.
+  Future<void> _initWebSocketConnection(String websocketURI,{int socketId=0}) async {
     try {
       int connected = 1; // start in error state. 0 = connected.
-      connected = await websocketmanagermulti.openPersistentWebSocket(0,websocketURI);
+      connected = await websocketmanagermulti.openPersistentWebSocket(socketId,websocketURI);
       setState(() {
 
       });
@@ -415,14 +518,17 @@ class SplitScreenState extends State<SplitScreen> {
       fetchRelayList(),
       fetchFriendsList(),
       fetchGroupsList(),
+      fetchFatGroupsList(),
     ];
 
     try {
+
       List responses = await Future.wait(futures);
       await _updateRowCacheIfNeeded(
         relayListData: responses[0],
         friendsListData: responses[1],
         groupListData: responses[2],
+        fatGroupListData: responses[3],
       );
     } catch (e) {
       print("Error fetching lists: $e");
@@ -481,6 +587,7 @@ class SplitScreenState extends State<SplitScreen> {
     super.initState();
     getWallpaper();
     _cachedWidgetData = [];
+    loadConfigSettings();
     Timer.periodic(Duration(seconds: 3), (timer) {
       _fetchDataFromWebSocketBuffer();
     });
@@ -492,6 +599,15 @@ class SplitScreenState extends State<SplitScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _fetchAndUpdateRowCache(); // For the left panel
     });
+  }
+
+  Future<void> loadConfigSettings() async {
+    Map<String, dynamic> configSettings = await OG_HiveInterface.getData_ConfigSettings();
+    if (mounted) { // Check if the widget is still mounted
+      setState(() {
+        _configSettings = configSettings;
+      });
+    }
   }
 
   // _processCallback is a large function that does the heavy lifting for any callback event.
@@ -515,8 +631,41 @@ class SplitScreenState extends State<SplitScreen> {
     right_click_remove_relay
     right_click_remove_group
     right_click_group_chat_msg_reply
-
+    left_click_left_panel_fat_group'
+    kind40_fat_left_click
+    right_click_fat_group_view_relays
+    right_click_copy_fat_group_id
      */
+
+
+    if (eventType == 'right_click_fat_group_view_relays') {
+      String group_id = unique_id;
+      String metadata_relays="";
+      try {
+        Map <String,dynamic> fatGroupMap = await OG_HiveInterface.getData_FatGroupMap(group_id);
+        metadata_relays = fatGroupMap['metadata_relays'];
+      } catch(e) {
+        print (e);
+      }
+
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Relays:'),
+            content: Text(metadata_relays),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close the info dialog
+                },
+                child: Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
 
     // Show the event dialog for editing a friend
     if (eventType == 'right_click_edit_friend') {
@@ -665,6 +814,93 @@ class SplitScreenState extends State<SplitScreen> {
       }
     } // end left click friend
 
+
+    // These are for opening up a group, whether from the left panel or from the right panel within a relay room.
+    if (eventType == 'left_click_left_panel_fat_group' ||
+        eventType == 'kind40_fat_left_click') {
+      String fatgroup = unique_id;
+
+      // Keep track of the left panel position so we get a nice ordering of widgets.
+      // Each time a new click happens, set the left panel position for the row
+      // equal to the highest number plus one.
+      String left_panel_position = await OG_HiveInterface.get_Highest_Left_Panel_Position();
+      left_panel_position = (int.parse(left_panel_position) + 1).toString(); // INCREMENT BY ONE
+      bool fatGroup_Exists;
+      fatGroup_Exists = await OG_HiveInterface.fatGroupExists(fatgroup);
+
+      // The group may not exist yet in our list if we're clicking on it in the right panel for the first time.
+      if (!fatGroup_Exists) {
+        try {
+          if (aux_data != null) {
+            await OG_HiveInterface.addData_FatGroups(fatgroup, left_panel_position,
+                aux_data: aux_data);
+          } else {
+            throw Exception('Aux data is null');
+          }
+        } catch (e) {
+          print(" $e");
+        }
+      } else {
+        // The group already exists,  set the left panel position.
+        await Future(() => OG_HiveInterface.setLeftPanelPositionFatGroup(
+            fatgroup, left_panel_position));
+      }
+
+     Map<String,dynamic> fatGroupMap = await OG_HiveInterface.getData_FatGroupMap(fatgroup);
+
+      String relays="";
+
+      if ( fatGroupMap['metadata_relays'] != null) {
+        relays = fatGroupMap['metadata_relays'];
+      }
+
+      String e_tag = unique_id;
+
+      final globalConfig = GlobalConfig();
+      int numberItemsToFetch=globalConfig.message_limit;
+
+      // Fetch all messages in the group.
+     String requestKind42s = nostr_core.constructJSON_fetch_kind_42s(e_tag,numberItemsToFetch);
+      // Get the group name.
+      String group_label = "";
+      if (aux_data != null) {
+        if (aux_data['group_name'] != null) {
+          group_label = aux_data['group_name'];
+        }
+      }
+
+      // Call the function to update the right panel
+      setState(() {
+        // After we re-establish the websocket connection, set the class variables
+        _mainWebSocketURI = "multi"; // Assign the newly selected relay to the class variable.
+        _roomType = "fat_group"; // action was left_click_left_panel_group
+        _rightPanelUniqueRowId = unique_id;
+        _rightPanelEventType = eventType;
+        _rightPanelRoomName = group_label;
+      });
+
+      // Fetch the group chat messages via the websocket.
+      try {
+        WebSocketManagerMulti().closeAllWebSocketConnections();
+        await freshWebSocketConnectandSend(relays, requestKind42s,storeRequest: true, multiSend: true);
+      } catch (e) {
+        print(
+            "There was a problem establishing a new websocket connection: $e");
+      }
+
+      // Set the clicked item to the top and refresh the left panel
+      left_panel_position = await OG_HiveInterface.get_Highest_Left_Panel_Position();
+      left_panel_position = (int.parse(left_panel_position) + 1).toString(); // INCREMENT BY ONE
+      await Future(() => OG_HiveInterface.setLeftPanelPositionFatGroup(fatgroup, left_panel_position));
+      // Now Refresh Left Side
+      setState(() {
+        _shouldUpdateRowCache = true;
+      });
+
+      // Update the left panel.
+      await Future(() => _fetchAndUpdateRowCache());
+    }
+
     // These are for opening up a group, whether from the left panel or from the right panel within a relay room.
     if (eventType == 'left_click_left_panel_group' ||
         eventType == 'kind40_left_click') {
@@ -766,6 +1002,9 @@ class SplitScreenState extends State<SplitScreen> {
       // Create the query.
       String requestKind40s = nostr_core.constructJSON_fetch_kind_40s();
 
+      String requestKind41s = nostr_core.constructJSON_fetch_kind_41s();
+
+
       // Call the function to update the right panel
       setState(() {
         // Set the class variables for the right side.
@@ -777,7 +1016,7 @@ class SplitScreenState extends State<SplitScreen> {
 
       // Pass the query to the websocket.
       try {
-        await freshWebSocketConnectandSend(relay, requestKind40s);
+        await freshWebSocketConnectandSend(relay, requestKind40s,secondary_message: requestKind41s);
       } catch (e) {
         print(
             "There was a problem establishing a new websocket connection: $e");
@@ -791,12 +1030,66 @@ class SplitScreenState extends State<SplitScreen> {
       await Clipboard.setData(ClipboardData(text: firstItem));
     }
 
-    // Copy the group ID to the clipboard from the left pane.
+
+// Copy the group ID to the clipboard from the left pane.
+if (eventType == 'right_click_copy_fat_group_id') {
+  String group = unique_id;
+  await Clipboard.setData(ClipboardData(text: group));
+}
+
+
+// Copy the group ID to the clipboard from the left pane.
     if (eventType == 'right_click_copy_group_id') {
       String group = unique_id;
 
       String firstItem = group.split(',')[0].trim();
       await Clipboard.setData(ClipboardData(text: firstItem));
+    }
+
+    // Add the fatgroup from a right click on the right side.
+
+    if (eventType == 'kind40_right_click_add_fat_group') {
+      // First add the Group to the DB.
+      String fatgroup = unique_id;
+      String left_panel_position = await OG_HiveInterface.get_Highest_Left_Panel_Position();
+      left_panel_position = (int.parse(left_panel_position) + 1).toString(); // INCREMENT BY ONE
+
+
+      bool fatgroup_Exists;
+       fatgroup_Exists = await OG_HiveInterface.fatGroupExists(fatgroup);
+
+      if (!fatgroup_Exists) {
+        try {
+          if (aux_data != null) {
+            await OG_HiveInterface.addData_FatGroups(fatgroup, left_panel_position,
+                aux_data: aux_data);
+          } else {
+            throw Exception('Aux data is null');
+          }
+        } catch (e) {
+          print(" $e");
+        }
+      } else {
+        // The group already exists,  set the left panel position.
+        await Future(() => OG_HiveInterface.setLeftPanelPositionFatGroup(
+            fatgroup, left_panel_position));
+      }
+// Get the group name.
+      String group_label = "";
+      if (aux_data != null) {
+        if (aux_data['group_name'] != null) {
+          group_label = aux_data['group_name'];
+        }
+      }
+
+
+      // Call the function to update the right panel
+      setState(() {
+        // After we re-establish the websocket connection, set the class variables
+          //also update left side
+        _shouldUpdateRowCache = true;
+      });
+      await Future(() => _fetchAndUpdateRowCache());
     }
 
     // Add the group from a right click on the right side.
@@ -875,6 +1168,36 @@ class SplitScreenState extends State<SplitScreen> {
       }
     }
 
+    // Delete the fat group from our list.
+    if (eventType == 'right_click_remove_fat_group') {
+      String fatgroup = unique_id;
+      await OG_HiveInterface.deleteFatGroup(fatgroup);
+      await OG_HiveInterface.removeMessagesForFatGroup(fatgroup);
+      setState(() {
+        _shouldUpdateRowCache = true;
+      });
+      await Future(() => _fetchAndUpdateRowCache());
+      if (_rightPanelUniqueRowId == fatgroup) {
+        // If we got here, it means we deleted the group that
+        // was open on the right panel.
+        setState(() {
+          _rightPanelUniqueRowId = "deleted";
+          _roomType = "home";
+          _rightPanelRoomName = "";
+          _oneTimeRepaintRightPanel = true;
+        });
+
+        setState(() {
+          _rightPanelUniqueRowId = "deleted";
+          _roomType = "home";
+          _rightPanelRoomName = "";
+          _oneTimeRepaintRightPanel = true;
+        });
+
+      }
+  }
+
+
     // Reply to a message (NIP 10).  Get the data to pass to the reply widget.
     if (eventType == 'right_click_group_chat_msg_reply') {
 
@@ -941,7 +1264,8 @@ class SplitScreenState extends State<SplitScreen> {
 
   bool _roomChange(String eventType, String unique_id) {
 
-    // Should be safe to say there's no room change if the ID didn't change:
+    // Should be safe to say there's no room change if the ID didn't change (fat groups are an exception because we want to reset the websockets).
+
     if (unique_id == _rightPanelUniqueRowId) {
       return false;
     }
@@ -960,7 +1284,10 @@ class SplitScreenState extends State<SplitScreen> {
       'right_click_user_icon_addFriend',
       'right_click_delete_friend',
       'right_click_remove_relay',
-      'right_click_remove_group'
+      'right_click_remove_group',
+      'right_click_fat_group_view_relays',
+      'kind40_right_click_add_fat_group'
+
     ];
 
     if (nonRoomChangeEvents.contains(eventType)) {
@@ -977,7 +1304,7 @@ class SplitScreenState extends State<SplitScreen> {
     if (_roomChange(eventType, unique_id)) {
 
       // If there's a room change, first close the websocket.
-      WebSocketManagerMulti().closeWebSocketConnection(0);
+      WebSocketManagerMulti().closeAllWebSocketConnections();
 
 
       updateShowReplyWidget(false);
@@ -986,6 +1313,7 @@ class SplitScreenState extends State<SplitScreen> {
       _rightPanelUniqueRowId = unique_id;
       _roomType =  "" ; // No room type yet, this will be defined a bit later when we call _processCallback.
       _cachedWidgetData = [];
+      currentSubscriptionIDs = [];
     }
 
     await _processCallback(eventType, unique_id, aux_data: aux_data);
@@ -996,6 +1324,7 @@ class SplitScreenState extends State<SplitScreen> {
     required List<dynamic> relayListData,
     required List<dynamic> friendsListData,
     required List<dynamic> groupListData,
+    required List<dynamic> fatGroupListData,
   }) async {
     if (_shouldUpdateRowCache) {
       _cachedRowItems = await ui_helper.getLeftPaneListItems(
@@ -1003,6 +1332,7 @@ class SplitScreenState extends State<SplitScreen> {
           _onMainCallback,
           relayListData,
           groupListData,
+          fatGroupListData,
           friendsListData,
           _leftPaneSortStyle);
       _shouldUpdateRowCache = false;
@@ -1028,6 +1358,15 @@ class SplitScreenState extends State<SplitScreen> {
         await OG_HiveInterface.getListofGroups(); // Fetch the data from DB
     return data;
   }
+
+  // This function fetches a list of chat groups from the DB
+  static Future<List> fetchFatGroupsList() async {
+    await OG_HiveInterface.initFatGroupsBox();
+    List<dynamic> data =
+    await OG_HiveInterface.getListofFatGroups(); // Fetch the data from DB
+    return data;
+  }
+
 
   // This function fetches a list of contacts from the DB
   static Future<List> fetchFriendsList() async {
@@ -1383,6 +1722,59 @@ class SplitScreenState extends State<SplitScreen> {
     return retval;
   }
 
+
+  // This function is called after filling out the create fat group dialog
+  Future<String?> handleCreateFatGroup(String group_name, String group_about, String relays) async {
+
+    // Do some basic validation first.
+    if (group_name == "") {
+      String err_msg = "Group name cannot be empty.";
+      return err_msg;
+    }
+
+    if (group_name.length > 50 ) {
+      String err_msg = "Group name cannot be more than 50 characters.";
+      return err_msg;
+    }
+    if (group_about.length > 200 ) {
+      String err_msg = "Group description cannot be more than 200 characters.";
+      return err_msg;
+    }
+
+    if (relays.length > 2000) {
+      String err_msg = "Relays list cannot be more than 2000 characters.";
+      return err_msg;
+    }
+
+    final global_config = GlobalConfig();
+    int max_relays = global_config.max_number_relays_fatgroup_create;
+
+    List<String> relay_list = relays.split(",");
+    int number_relays = relay_list.length;
+    if (number_relays > max_relays) {
+      String err_msg = "Maximum number of relays here is "+ max_relays.toString();
+      return err_msg;
+    }
+
+    String kind40_post = "";
+    String kind41_post = "";
+    kind40_post = await nostr_core.create_kind40_post(group_name.trim(), group_about.trim());
+    String eTagId = OG_util.getIdFromEvent(kind40_post);
+
+    kind41_post = await nostr_core.create_kind41_post(eTagId, relays);
+
+     try {
+       // call websocketmanagermulti for posting fatgroup function
+     websocketmanagermulti.createFatGroup(kind40_post, kind41_post, relays);
+     }
+     catch (e) {
+       print (e);
+     }
+ goHome();
+    String? retval=null;
+    return retval;
+  }
+
   // DB operations to insert the relay.
   Future<String?> attemptToInsertRelay(String relay) async {
     String left_panel_position =
@@ -1401,6 +1793,104 @@ class SplitScreenState extends State<SplitScreen> {
 
     return null;
   }
+
+
+
+  void showCreateFatGroupDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        String _errorMessage = '';
+        TextEditingController _nameController = TextEditingController();
+        TextEditingController _aboutController = TextEditingController();
+        TextEditingController _relayController = TextEditingController();
+        FocusNode _focusNode = FocusNode(); // Create a FocusNode
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            Future<void> _submitForm() async {
+              String? result = await handleCreateFatGroup(
+                _nameController.text,
+                _aboutController.text,
+                _relayController.text,
+              );
+              if (result == null) {
+
+                Navigator.of(context).pop();
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: Text('Group Created!'),
+                      content: Text('Your new group has been submitted to the relays.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop(); // Close the info dialog
+                          },
+                          child: Text('OK'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              } else {
+                setState(() {
+                  _errorMessage = result;
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text('Create a Group Chat'),
+              content: Container(
+                width: 400.0,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: _nameController,
+                        focusNode: _focusNode,
+                        decoration: InputDecoration(
+                          labelText: 'Group Name',
+                        ),
+                        onSubmitted: (text) => _submitForm(),
+                        autofocus: true,
+                      ),
+                      TextField(
+                        controller: _aboutController,
+                        decoration: InputDecoration(
+                          labelText: 'Group About',
+                        ),
+                        onSubmitted: (text) => _submitForm(),
+                      ),
+                      TextField(
+                        controller: _relayController,
+                        decoration: InputDecoration(
+                          labelText: 'Enter List of Relays: (separated by commas)',
+                        ),
+                        onSubmitted: (text) => _submitForm(),
+                      ),
+                      if (_errorMessage.isNotEmpty)
+                        Text(_errorMessage, style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: _submitForm,
+                  child: Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } // end of showCreateFatGroupDialog
+
 
   // Show the dialog to create new relay.
   void showInsertRelayDialog(BuildContext context) {
@@ -1527,6 +2017,40 @@ class SplitScreenState extends State<SplitScreen> {
         websocketmanagermulti.send(0,kind42_post);
       } else {
         print("WEBSOCKET NOT OPEN!");
+      }
+    }
+
+
+    //--------------------------------
+
+    // If we're in a group chat room...
+    if (_roomType == "fat_group") {
+      List<int> openSocketIds = await websocketmanagermulti.getActiveSockets();
+      if (openSocketIds.isNotEmpty) {
+        String kind42_post = "";
+
+        // This is the e_tag of the root kind 40, not to be confused with reply e_tag of kind 42.
+        String e_tag = _rightPanelUniqueRowId;
+
+        String reply_e_Tag = "";
+        if (e_Tag_Reply != null) {
+          reply_e_Tag = e_Tag_Reply;
+        }
+
+        String reply_p_Tag = "";
+        if (p_Tag_Reply != null) {
+          reply_p_Tag = p_Tag_Reply;
+        }
+
+        kind42_post = await nostr_core.create_kind42_post(e_tag, post_content,
+            e_Tag_Reply: reply_e_Tag, p_Tag_Reply: reply_p_Tag);
+
+        // Send message to all open sockets concurrently
+        await Future.wait(openSocketIds.map((socketId) => websocketmanagermulti.send(socketId, kind42_post)));
+
+
+      } else {
+        print("NO OPEN WEBSOCKETS!");
       }
     }
 
@@ -1711,9 +2235,9 @@ class SplitScreenState extends State<SplitScreen> {
                                         },
                                         child: CircleAvatar(
                                           backgroundColor: Colors.blue,
-                                          radius: 24.0,
+                                          radius: 20.0,
                                           child: Icon(Icons.add,
-                                              size: 36.0, color: Colors.white),
+                                              size: 30.0, color: Colors.white),
                                         ),
                                       ),
                                     ),
@@ -1726,9 +2250,29 @@ class SplitScreenState extends State<SplitScreen> {
                                         },
                                         child: CircleAvatar(
                                           backgroundColor: Colors.redAccent,
-                                          radius: 24.0,
+                                          radius: 20.0,
                                           child: Icon(Icons.add,
-                                              size: 36.0, color: Colors.white),
+                                              size: 30.0, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 16.0),
+                                    Tooltip(
+                                      message: 'Create a Group Chat',
+                                      child: InkWell(
+                                        onTap: () {
+                                          showCreateFatGroupDialog(context);
+                                          setState(() {
+                                            _shouldUpdateRowCache = true;
+                                          });
+                                          _fetchAndUpdateRowCache()
+                                              .then((_) => () {});
+                                        },
+                                        child: CircleAvatar(
+                                          backgroundColor: Colors.black,
+                                          radius: 20.0,
+                                          child: Icon(Icons.add,
+                                              size: 30.0, color: Colors.white),
                                         ),
                                       ),
                                     ),
@@ -1746,7 +2290,7 @@ class SplitScreenState extends State<SplitScreen> {
                                         },
                                         child: CircleAvatar(
                                           backgroundColor: Colors.grey,
-                                          radius: 24.0,
+                                          radius: 20.0,
                                           child: Icon(Icons.sort,
                                               size: 24.0, color: Colors.black),
                                         ),
