@@ -18,8 +18,7 @@ You can create a FatGroup independently of browsing relays, by pushing the black
 
 # Chat Experience
 
-The top panel will keep you informed of how many relays are in the fat group and how many are currently connected. The messages are cached and watermarked independently with each relay, and de-duplicated for storage. There is also an trashcan icon on the top right
-where you can delete the cache. OstrichGram is designed to "listen to all, post to all" for maximum redundancy.
+The top panel will keep you informed of how many relays are in the fat group and how many are currently connected. The messages are cached and watermarked independently with each relay, and de-duplicated for storage. You can reconnect to all relays with the reload icon. There's also an trashcan icon to delete the cache. OstrichGram is designed to "listen to all, post to all" for maximum redundancy.
 
 ![Fat Group Chat on OstrichGram ](SHOT7.png)
   
