@@ -8,13 +8,13 @@ According to NIP-28, the proper way to indicate relays is to specify them using 
 
 # OstrichGram recognizes Fat Groups
 
-When there is at least such e-tag, OstrichGram will mark the group as a "Fat Group" as opposed to a normal group.  Groups and Fatgroups look differently visually.  When browsing a relay, the group box will be slightly larger with a thicker, darker, border, and the icon for a fatgroup.  The Fat Group icon also is different from a Group in the left panel, featuring a darker Ostrich icon.
+When there is at least such e-tag, OstrichGram will mark the group as a "Fat Group" as opposed to a normal group.  Groups and Fatgroups look differently visually.  When browsing a relay, the group box will be slightly larger with a thicker, darker, border, and the icon for a fatgroup. 
 
 ![Fat Group on OstrichGram ](SHOT6.png)
 
 # Fat Group Creation
 
-You can create a FatGroup independently of browsing relays, by pushing the black button on the left.
+You can create a FatGroup independently of browsing relays, by pushing the black button on the left.  The Fat Group icon also is different from a Group in the left panel, featuring a darker Ostrich icon.
 
 # Chat Experience
 
