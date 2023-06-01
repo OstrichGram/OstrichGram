@@ -42,6 +42,7 @@ dependencies:
   hive: ^2.0.4
   hive_flutter: ^1.0.0
   path_provider: 
+  path_provider_macos: ^2.0.0
   clipboard: 
   synchronized: 
   intl:  

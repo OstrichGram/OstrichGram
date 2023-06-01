@@ -22,6 +22,8 @@ import 'input_bar_container.dart';
 import 'og_emoji_picker.dart';
 import 'about_screen.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider_macos/path_provider_macos.dart';
+
 
 /*
 
