@@ -289,7 +289,7 @@ class _AliasScreenState extends State<AliasScreen> {
                     },
                     child: Text('Copy Private Key to Clipboard'),
                     style: ElevatedButton.styleFrom(
-                      primary: Colors.red, // Set the background color to red
+                      backgroundColor: Colors.red, // Set the background color to red
                     ),
                   ),
                   SizedBox(height: 20),
@@ -305,7 +305,7 @@ class _AliasScreenState extends State<AliasScreen> {
                     },
                     child: Text('Delete this User'),
                     style: ElevatedButton.styleFrom(
-                      primary: Colors.red, // Set the background color to red
+                      backgroundColor: Colors.red, // Set the background color to red
                     ),
                   ),
                 ],

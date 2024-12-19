@@ -1,14 +1,15 @@
 import 'package:flutter_svg/flutter_svg.dart';
-
-// basic SVG wrapper
+import 'package:flutter/widgets.dart';
 
 class SvgWrapper {
   final String rawSvg;
 
   SvgWrapper(this.rawSvg);
 
-  Future<DrawableRoot> generateLogoSync() async {
-    DrawableRoot svgRoot = await svg.fromSvgString(rawSvg, rawSvg);
-    return svgRoot;
+  // Return an SvgPicture widget instead of DrawableRoot
+  Widget generateLogoSync() {
+    return SvgPicture.string(rawSvg);
   }
 }
+
+

@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'multiavatar2.dart';
 import 'svg_wrapper.dart';
-import 'my_paint.dart';
 import 'chat_bubbles-1.4.1/chat_bubbles.dart';
 import 'og_util.dart';
 import 'global_config.dart';
@@ -24,7 +23,7 @@ class ui_helper {
   static Future<void> init() async {
   }
 
- /* This function generates a "drawable root", which is a primitive used for SVG graphics.
+ /* This function generates an svgwidget using our svg wrapper class.
  We are using the multiavatar open source library to generate avatars.  Here is it customized
  to override the theme (avatar style) so that the user can specify for example that Bob is
  to be a robot avatar. We also have a black and white option so non-contacts in the group
@@ -32,25 +31,19 @@ class ui_helper {
  but the parameter is still called blackandWhite.
 
   */
-  static Future<DrawableRoot> generateAvatar(String imageSeedValue,
+  static Future<Widget> generateAvatar(String imageSeedValue,
       {String? themeOverride, bool blackAndWhite = false}) async {
 
-    if (themeOverride != null) {
-      if (themeOverride.length == 1) {
-        themeOverride = "0" + themeOverride;
-      }
-    }
-    bool makeBW = false;
-    if (blackAndWhite != null) {
-      if (blackAndWhite == true) {
-        makeBW = true;
-      }
+    // Process themeOverride and blackAndWhite parameters
+    if (themeOverride != null && themeOverride.length == 1) {
+      themeOverride = "0" + themeOverride;
     }
 
     String svgCode = multiavatar(
-        imageSeedValue, themeOverride: themeOverride, makeBW: makeBW);
-    DrawableRoot svgRoot = await SvgWrapper(svgCode).generateLogoSync();
-    return svgRoot;
+        imageSeedValue, themeOverride: themeOverride, makeBW: blackAndWhite);
+
+    // Use SvgWrapper to generate an SvgPicture
+    return SvgWrapper(svgCode).generateLogoSync();
   }
 
   // This creates a "one time" bubble for certain cases where we want to dispaly an error, warning, or just a message.
@@ -494,38 +487,47 @@ class ui_helper {
     return '';
   }
 
-  // This function generates the avatar for contact creation, which are previews.
+// This function generates the avatar for contact creation, which are previews.
   static Future<Widget> getAvatarSvgforContactCreate(int index) async {
-
+    // Generate a seed string based on the index
     String seedString = "";
-
     String indexString = index.toString();
     if (indexString.length < 2) {
       indexString = "0" + indexString;
     }
 
-    Random random = new Random();
+    Random random = Random();
     int randomNumber = random.nextInt(9999);
     seedString = randomNumber.toString();
 
-    DrawableRoot svgRoot = await generateAvatar(
-        seedString, themeOverride: indexString);
+    // Generate the SVG string using multiavatar
+    String svgCode = multiavatar(seedString, themeOverride: indexString);
 
-    return CustomPaint(
-      painter: MyPainter60(svgRoot, Size(60, 60)),
-      size: Size(60, 60),
+    // Return an SvgPicture resized to 60x60
+    return SvgPicture.string(
+      svgCode,
+      width: 60,
+      height: 60,
     );
   }
 
+
   // This function builds the image for the person next to their chat message in the main window, either a friend, other person, or user himself.
-  static Widget buildChatUserImage(BuildContext context,
-      Function onMainCallback, Map<String, dynamic> auxData,
-      {bool chatRowIsFriend = false, String avatar_style = "default", bool chatRowIsMe = false, customOstrich = "1"}) {
+  static Widget buildChatUserImage(
+      BuildContext context,
+      Function onMainCallback,
+      Map<String, dynamic> auxData, {
+        bool chatRowIsFriend = false,
+        String avatar_style = "default",
+        bool chatRowIsMe = false,
+        String customOstrich = "1",
+      }) {
     String customOstrichIcon = '';
     if (chatRowIsMe) {
       customOstrichIcon = "assets/images/OS-" + customOstrich + ".png";
     }
     String pubkey = auxData['pubkey'];
+
     return GestureDetector(
       onTap: () {
         onMainCallback('user_icon_tap', 'some_value');
@@ -533,9 +535,12 @@ class ui_helper {
       onSecondaryTapDown: (details) {
         showMenu(
           context: context,
-          position: RelativeRect.fromLTRB(details.globalPosition.dx,
-              details.globalPosition.dy, details.globalPosition.dx,
-              details.globalPosition.dy),
+          position: RelativeRect.fromLTRB(
+            details.globalPosition.dx,
+            details.globalPosition.dy,
+            details.globalPosition.dx,
+            details.globalPosition.dy,
+          ),
           items: [
             PopupMenuItem(
               value: 1,
@@ -554,28 +559,37 @@ class ui_helper {
           }
         });
       },
-      child: FutureBuilder(
-        future: chatRowIsMe ? null : generateAvatar(
-            pubkey, blackAndWhite: !chatRowIsFriend,
-            themeOverride: avatar_style),
-        builder: (BuildContext context, AsyncSnapshot<DrawableRoot?> snapshot) {
-          if (chatRowIsMe) {
-            return Image.asset(customOstrichIcon,
+      child: chatRowIsMe
+          ? Image.asset(
+        customOstrichIcon,
+        width: 60,
+        height: 60,
+      )
+          : FutureBuilder(
+        future: generateAvatar(
+          pubkey,
+          blackAndWhite: !chatRowIsFriend,
+          themeOverride: avatar_style,
+        ),
+        builder: (BuildContext context, AsyncSnapshot<Widget?> snapshot) {
+          if (snapshot.connectionState == ConnectionState.done &&
+              snapshot.hasData) {
+            // Return the SVG widget directly
+            return SizedBox(
               width: 60,
               height: 60,
+              child: snapshot.data,
             );
-          } else if (snapshot.connectionState == ConnectionState.done) {
-            return CustomPaint(
-              painter: MyPainter60(snapshot.data!, Size(60, 60)),
-              size: Size(60, 60),
-            );
-          } else {
+          } else if (snapshot.connectionState == ConnectionState.waiting) {
             return CircularProgressIndicator();
+          } else {
+            return Icon(Icons.error); // Fallback in case of error
           }
         },
       ),
     );
   }
+
 
   // This function builds the entire row , including both the chat user image and the chat bubble. This is for group chat.
   static Future<Widget> buildChatBubbleRowGroup(BuildContext context,
@@ -694,15 +708,26 @@ class ui_helper {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          buildChatUserImage(context, onMainCallback, aux_data,
-              chatRowIsFriend: chatRowIsFriend,
-              avatar_style: avatar_style,
-              chatRowIsMe: chatRowIsMe,
-              customOstrich: customOstrich ),
+          buildChatUserImage(
+            context,
+            onMainCallback,
+            aux_data,
+            chatRowIsFriend: chatRowIsFriend,
+            avatar_style: avatar_style,
+            chatRowIsMe: chatRowIsMe,
+            customOstrich: customOstrich ?? "1", // Ensure non-null value
+          ),
           SizedBox(width: 20),
           buildChatBubbleFriend(
-              context, onMainCallback, message_text, aux_data,senderIsMe, timeString),
+            context,
+            onMainCallback,
+            message_text,
+            aux_data,
+            senderIsMe,
+            timeString,
+          ),
         ],
+
       ),
     );
   }
@@ -1447,7 +1472,7 @@ class ui_helper {
   static Future<void> showContextMenuFatGroup(BuildContext context, Offset position, VoidCallback onOption1, VoidCallback onOption2, VoidCallback onOption3) async {
     final ThemeData customTheme = ThemeData(
       textTheme: TextTheme(
-        subtitle1: TextStyle(color: Colors.black, fontSize: 16),
+        titleMedium: TextStyle(color: Colors.black, fontSize: 16),
       ),
       popupMenuTheme: PopupMenuThemeData(
         elevation: 4,
@@ -1500,7 +1525,7 @@ class ui_helper {
   static Future<void> showContextMenuGroup(BuildContext context, Offset position, VoidCallback onOption1, VoidCallback onOption2) async {
     final ThemeData customTheme = ThemeData(
       textTheme: TextTheme(
-        subtitle1: TextStyle(color: Colors.black, fontSize: 16),
+        titleMedium: TextStyle(color: Colors.black, fontSize: 16),
       ),
       popupMenuTheme: PopupMenuThemeData(
         elevation: 4,
@@ -1653,16 +1678,25 @@ class ui_helper {
     );
   }
 
-// build left panel row for a friend
-  static Widget buildListItemFriend(BuildContext context, Function onMainCallback, String name,  String message, String time, String avatar_style, String unique_friend_id) {
+  // build left panel row for a friend
+  static Widget buildListItemFriend(
+      BuildContext context,
+      Function onMainCallback,
+      String name,
+      String message,
+      String time,
+      String avatar_style,
+      String unique_friend_id,
+      ) {
     Map<String, dynamic> auxData = {
       'friend_name': name,
     };
+
     return Padding(
       padding: const EdgeInsets.only(left: 15, right: 15, top: 15, bottom: 15),
       child: Container(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Colors.redAccent  , width: 1.0)),
+          border: Border(bottom: BorderSide(color: Colors.redAccent, width: 1.0)),
         ),
         child: GestureDetector(
           onSecondaryTapDown: (details) {
@@ -1684,18 +1718,18 @@ class ui_helper {
                   children: [
                     FutureBuilder(
                       future: generateAvatar(unique_friend_id, themeOverride: avatar_style),
-                      builder: (BuildContext context, AsyncSnapshot<DrawableRoot?> snapshot) {
-                        if (snapshot.connectionState == ConnectionState.done) {
+                      builder: (BuildContext context, AsyncSnapshot<Widget?> snapshot) {
+                        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+                          // Return the SVG widget directly
                           return Container(
                             width: 60,
                             height: 60,
-                            child: CustomPaint(
-                              painter: MyPainter60(snapshot.data!, Size(60, 60)),
-                              size: Size(60, 60),
-                            ),
+                            child: snapshot.data,
                           );
-                        } else {
+                        } else if (snapshot.connectionState == ConnectionState.waiting) {
                           return CircularProgressIndicator();
+                        } else {
+                          return Icon(Icons.error); // Fallback in case of error
                         }
                       },
                     ),
@@ -1717,7 +1751,6 @@ class ui_helper {
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                           ),
-
                         ],
                       ),
                     ),
@@ -1751,6 +1784,7 @@ class ui_helper {
       ),
     );
   }
+
 
 // build left panel row for a fat group
   static Widget buildListItemFatGroup(BuildContext context, Function onMainCallback, String name, String message, Uint8List seed, String unique_group_id) {

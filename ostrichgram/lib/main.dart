@@ -9,7 +9,6 @@ import 'nostr_core.dart';
 import 'web_socket_manager_multi.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'my_paint.dart';
 import 'top_container.dart';
 import 'dart:convert';
 import 'right_panel.dart';
@@ -1408,7 +1407,7 @@ if (eventType == 'right_click_copy_fat_group_id') {
     }
 
     // Generate the avatar icon for our friend.
-    DrawableRoot svgRoot = await ui_helper.generateAvatar(pubkey, themeOverride: my_avatar_style);
+    Widget svgWidget = await ui_helper.generateAvatar(pubkey, themeOverride: my_avatar_style);
 
     final TextEditingController _nameController =
         TextEditingController(text: fetchedName);
@@ -1456,37 +1455,37 @@ if (eventType == 'right_click_copy_fat_group_id') {
                       content: SingleChildScrollView(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            CustomPaint(
-                              painter: MyPainter60(svgRoot, Size(60, 60)),
-                              size: Size(60, 60),
-                            ),
-                            SizedBox(height: 10),
-                            Text('$npub'),
-                            SizedBox(height: 10),
-                            TextField(
-                              controller: _nameController,
-                              decoration: InputDecoration(labelText: 'Name'),
-                            ),
-                            SizedBox(height: 10),
-                            TextField(
-                              controller: _relayController,
-                              decoration:
-                                  InputDecoration(labelText: 'Relay for DMs'),
-                              keyboardType: TextInputType.number,
-                            ),
-                            SizedBox(height: 10),
-                            ValueListenableBuilder(
-                              valueListenable: _errorMessage,
-                              builder: (BuildContext context, String value,
-                                  Widget? child) {
-                                return Text(
-                                  value,
-                                  style: TextStyle(color: Colors.red),
-                                );
-                              },
-                            ),
-                          ],
+                            children: <Widget>[
+                              // Replace CustomPaint with the direct SVG widget
+                              SizedBox(
+                                width: 60,
+                                height: 60,
+                                child: svgWidget, // This is the Widget returned by ui_helper.generateAvatar
+                              ),
+                              SizedBox(height: 10),
+                              Text('$npub'),
+                              SizedBox(height: 10),
+                              TextField(
+                                controller: _nameController,
+                                decoration: InputDecoration(labelText: 'Name'),
+                              ),
+                              SizedBox(height: 10),
+                              TextField(
+                                controller: _relayController,
+                                decoration: InputDecoration(labelText: 'Relay for DMs'),
+                                keyboardType: TextInputType.number,
+                              ),
+                              SizedBox(height: 10),
+                              ValueListenableBuilder(
+                                valueListenable: _errorMessage,
+                                builder: (BuildContext context, String value, Widget? child) {
+                                  return Text(
+                                    value,
+                                    style: TextStyle(color: Colors.red),
+                                  );
+                                },
+                              ),
+                            ],
                         ),
                       ),
                       actions: <Widget>[

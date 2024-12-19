@@ -48,9 +48,10 @@ dependencies:
   intl:  
   random_color:
   multiavatar:  
-  flutter_svg: ^0.22.0  # MUST BE THIS VERSION!  
+  flutter_svg: ^2.0.0
+  path_drawing:
   kepler: ^1.0.3 
-  xml: ^5.3.1 
+  xml: 
   emoji_regex:  
   emoji_data:  
   url_launcher: ^6.0.12 

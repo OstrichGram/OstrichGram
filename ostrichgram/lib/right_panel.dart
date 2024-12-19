@@ -95,7 +95,7 @@ class _RightPanelState extends State<RightPanel> with TickerProviderStateMixin {
             },
             child: Scrollbar(
               controller: _scrollController,
-              isAlwaysShown: true,
+              thumbVisibility: true,
               child: ListView(
                 controller: _scrollController,
                 children: cachedItems,

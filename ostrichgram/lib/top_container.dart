@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/parser.dart';
 import 'web_socket_manager_multi.dart';
 import 'dart:async';
 import 'og_hive_interface.dart';
@@ -9,7 +8,6 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'ui_helper.dart';
-import 'my_paint.dart';
 import 'global_config.dart';
 
 /*
@@ -28,10 +26,11 @@ query to the relay.
 
 class DataFromDB {
   final List<String> dataList;
-  final DrawableRoot friendAvatar;
+  final Widget friendAvatar;
 
   DataFromDB({required this.dataList, required this.friendAvatar});
 }
+
 
 class TopContainer extends StatefulWidget {
   final SplitScreenState splitScreenState;
@@ -328,31 +327,45 @@ class _TopContainerState extends State<TopContainer>
 
   } //end reload top
 
-
-
-  Future<DrawableRoot> createEmptyDrawableRoot() async {
-    SvgParser myParser = SvgParser();
+  Future<Widget> createEmptySvgPicture() async {
     String emptySvgString =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"></svg>';
-    return await myParser.parse(emptySvgString);
+        '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"></svg>';
+    // Return an SvgPicture as a placeholder
+    return SvgPicture.string(
+      emptySvgString,
+      width: 60,
+      height: 60,
+    );
   }
 
   static Widget buildTopFriendImage(
       BuildContext context, String friend_pubkey) {
-    return FutureBuilder(
+    return FutureBuilder<Widget>(
       future: ui_helper.generateAvatar(friend_pubkey, blackAndWhite: false),
-      builder: (BuildContext context, AsyncSnapshot<DrawableRoot?> snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          return CustomPaint(
-            painter: MyPainter60(snapshot.data!, Size(60, 60)),
-            size: Size(60, 60),
+      builder: (BuildContext context, AsyncSnapshot<Widget> snapshot) {
+        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+          return SizedBox(
+            width: 60,
+            height: 60,
+            child: snapshot.data,
           );
-        } else {
+        } else if (snapshot.connectionState == ConnectionState.waiting) {
           return CircularProgressIndicator();
+        } else {
+          return SizedBox(
+            width: 60,
+            height: 60,
+            child: SvgPicture.string(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"></svg>',
+            ),
+          );
         }
       },
     );
   }
+
+
+
 
   Future<DataFromDB> _getDataFromDB() async {
 
@@ -367,7 +380,8 @@ class _TopContainerState extends State<TopContainer>
     if (alias_name == null || alias_name == "") {
       return DataFromDB(
           dataList: [" ", relay_name, " "],
-          friendAvatar: await createEmptyDrawableRoot());
+          friendAvatar: await createEmptySvgPicture());
+
     }
 
     Map<String, dynamic> aliasMap2 =
@@ -389,7 +403,7 @@ class _TopContainerState extends State<TopContainer>
         print(e);
         return DataFromDB(
             dataList: [" ", relay_name, " "],
-            friendAvatar: await createEmptyDrawableRoot());
+            friendAvatar: await createEmptySvgPicture());
       }
     }
 
@@ -420,8 +434,8 @@ class _TopContainerState extends State<TopContainer>
       }
     }
 
-// Instantiate an empty DrawableRoot object
-    DrawableRoot friendAvatar = await createEmptyDrawableRoot();
+    // Instantiate an empty SvgPicture widget
+    Widget friendAvatar = await createEmptySvgPicture();
 
 
     if (widget.splitScreenState.roomType == "friend") {
@@ -497,7 +511,12 @@ if (_isConnected.value ==2 ) {
         } else {
           String alias_name = snapshot.data?.dataList[0] ?? '';
           String relay_name = snapshot.data?.dataList[1] ?? '';
-          DrawableRoot? friendAvatar = snapshot.data?.friendAvatar;
+          Widget friendAvatar = snapshot.data?.friendAvatar ?? SvgPicture.string(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"></svg>',
+            width: 60,
+            height: 60,
+          );
+
           return Container(
             height: 110,
             color: Color(0xFFF8F8F8),
@@ -517,25 +536,23 @@ if (_isConnected.value ==2 ) {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.start,
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                              children: [
                               SizedBox(width: 12),
-                              roomType == "friend"
-                                  ? CustomPaint(
-                                      painter: MyPainter60(
-                                          (friendAvatar ??
-                                                  createEmptyDrawableRoot())
-                                              as DrawableRoot,
-                                          Size(60, 60)),
-                                      size: Size(60, 60),
-                                    )
-                                  : Image.asset(
-                                      roomImageString,
-                                      width: 60,
-                                      height: 60,
-                                      fit: BoxFit.contain,
-                                    ),
-                            ],
-                          ),
+                          roomType == "friend"
+                              ? SizedBox(
+                              width: 60,
+                              height: 60,
+                            child: friendAvatar,
+                        )
+                            : Image.asset(
+                          roomImageString,
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.contain,
+                        ),
+                      ],
+
+                    ),
                         ),
                         SizedBox(height: 6),
                         Row(
