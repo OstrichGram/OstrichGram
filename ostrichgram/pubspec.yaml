@@ -41,7 +41,7 @@ dependencies:
   pointycastle: ^3.3.0
   hive: ^2.0.4
   hive_flutter: ^1.0.0
-  path_provider: 
+  path_provider: ^2.1.4
   path_provider_macos: ^2.0.0
   clipboard: 
   synchronized: 
